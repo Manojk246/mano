@@ -11,6 +11,7 @@ from app.routes.leetcode_routes import router as leetcode_router
 from app.routes.codechef_routes import router as codechef_router
 from app.routes.github_routes import router as github_router
 from app.routes.analyze_all import router as analyze_all_router
+from app.routes.admin_resume_filter import router as admin_filter_router  # ✅ FIXED (no .py)
 
 app = FastAPI(title="AI Resume + Platform Analyzer")
 
@@ -40,6 +41,7 @@ app.include_router(leetcode_router, prefix="/leetcode", tags=["LeetCode"])
 app.include_router(codechef_router, prefix="/codechef", tags=["CodeChef"])
 app.include_router(github_router, prefix="/github", tags=["GitHub"])
 app.include_router(analyze_all_router, tags=["Analyze All"])
+app.include_router(admin_filter_router, prefix="/admin", tags=["Admin Filter"])  # ✅
 
 # -------------------------
 # Run info

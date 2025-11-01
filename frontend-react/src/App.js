@@ -5,7 +5,8 @@ import About from './pages/About';
 import Features from './pages/Features';
 import Contact from './pages/Contact';
 import Login from './pages/Login';
-import Admin from './pages/Admin';
+import Admin from './pages/Admin/Admin';
+import Admin1 from './pages/Admin/Admin_Resume_Filter';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
       <Route path="/contact" element={<Contact />} />
       <Route path="/login" element={<Login />} />
       <Route path="/admin" element={<Admin />} />
+      <Route path="/admin_resume_filter" element={<Admin1 />} />
       <Route path="*" element={<div style={{padding:20}}><Link to="/">Back to Home</Link></div>} />
     </Routes>
   );
