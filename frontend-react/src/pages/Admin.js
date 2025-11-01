@@ -72,9 +72,19 @@ export default function Admin() {
   const [selectedFile, setSelectedFile] = useState(null);
 
   // small helpers
-  function addMsg(type, text, icon) {
-    setMessages((m) => [{ type, text, icon, id: Date.now() }, ...m]);
-  }
+function addMsg(type, text, icon) {
+  setMessages((prev) => {
+    if (prev.length === 0) {
+      // if no message, add new
+      return [{ type, text, icon, id: Date.now() }];
+    } else {
+      // else replace the latest message instead of stacking
+      const latest = prev[0];
+      return [{ ...latest, type, text, icon }, ...prev.slice(1)];
+    }
+  });
+}
+
   function clearMsgs() {
     setMessages([]);
   }
@@ -107,35 +117,51 @@ export default function Admin() {
       return;
     }
     try {
-      addMsg("processing", "Uploading resume...", "⏳");
-      const formData = new FormData();
-      formData.append("file", selectedFile);
+      addMsg("processing", "⏳ Uploading resume...", "⏳");
+const formData = new FormData();
+formData.append("file", selectedFile);
 
-      const res = await fetch(`${backend}/upload_resume`, {
-        method: "POST",
-        body: formData,
-      });
+const res = await fetch(`${backend}/upload_resume`, {
+  method: "POST",
+  body: formData,
+});
 
-      const json = await res.json();
+const json = await res.json();
 
-      // clear processing msg
-      addMsg("success", "Server responded", "✅");
+if (json.error) {
+  addMsg("error", `❌ Server error: ${json.error}`, "⚠️");
+  alert(`Error: ${json.error}`);
+  return;
+}
+if (!json.data) {
+  addMsg("error", "❌ Unexpected server response", "⚠️");
+  alert("Unexpected response from server. Please try again.");
+  return;
+}
 
-      if (json.error) {
-        addMsg("error", `Server error: ${json.error}`, "❌");
-        alert(`Error: ${json.error}`);
-        return;
-      }
+// ✅ Update success message dynamically
+addMsg("success", "✅ Resume analyzed successfully!", "🎉");
+setTimeout(() => clearMsgs(), 2000); // auto-hide after 2 seconds
+
       if (!json.data) {
-        addMsg("error", "Unexpected server response", "❌");
+        console.log("error", "Unexpected server response", "❌");
         alert("Unexpected response from server. Please try again.");
         return;
       }
 
       // update main data safely
-      const incoming = { ...initialData, ...json.data }; // ensure missing keys exist
-      incoming.education = { ...initialData.education, ...(json.data.education || {}) };
-      incoming.skills = { ...initialData.skills, ...(json.data.skills || {}) };
+// ✅ FIX: merge ats_score & word_count from root level too
+const incoming = {
+  ...initialData,
+  ...json.data,
+  ats_score: json.ats_score ?? json.data?.ats_score ?? null,
+  word_count: json.word_count ?? null,
+};
+
+// ensure nested structures are preserved
+incoming.education = { ...initialData.education, ...(json.data.education || {}) };
+incoming.skills = { ...initialData.skills, ...(json.data.skills || {}) };
+
 
       setData(incoming);
 
@@ -233,10 +259,13 @@ Summary: ${data.summary || "N/A"}
       const json = await res.json();
       // attach results in data object under leetcode_stats
       setData((prev) => ({ ...prev, leetcode_stats: json }));
-      addMsg("success", `LeetCode data fetched for ${username}`, "✅");
+      addMsg("success", "✅ Success!", "✅");
+setTimeout(() => clearMsgs(), 2000);
+
     } catch (e) {
       console.error("LeetCode fetch failed", e);
-      addMsg("error", "LeetCode fetch failed", "❌");
+      addMsg("error", `❌ Failed to fetch ${username}`, "❌");
+
     } finally {
       delete activeFetchRef.current[tag];
     }
@@ -261,10 +290,13 @@ Summary: ${data.summary || "N/A"}
       }
       const json = await res.json();
       setData((prev) => ({ ...prev, codechef_stats: json }));
-      addMsg("success", `CodeChef data fetched for ${username}`, "✅");
+      addMsg("success", "✅ Success!", "✅");
+setTimeout(() => clearMsgs(), 2000);
+
     } catch (e) {
       console.error("CodeChef fetch failed", e);
-      addMsg("error", "CodeChef fetch failed", "❌");
+      addMsg("error", `❌ Failed to fetch ${username}`, "❌");
+
     } finally {
       delete activeFetchRef.current[tag];
     }
@@ -292,27 +324,16 @@ Summary: ${data.summary || "N/A"}
       }
       const json = await res.json();
       setData((prev) => ({ ...prev, github_stats: json }));
-      addMsg("success", `GitHub data fetched for ${username}`, "✅");
+      addMsg("success", "✅ Success!", "✅");
+setTimeout(() => clearMsgs(), 2000);
+
     } catch (e) {
       console.error("GitHub fetch failed", e);
-      addMsg("error", "GitHub fetch failed", "❌");
+     addMsg("error", `❌ Failed to fetch ${username}`, "❌");
+
     } finally {
       delete activeFetchRef.current[tag];
     }
-  }
-
-  // Callbacks to manually trigger fetch from UI (buttons)
-  function onFetchLeetCode() {
-    if (data?.leetcode) fetchLeetCodeStats(data.leetcode);
-    else addMsg("error", "No LeetCode link provided", "⚠️");
-  }
-  function onFetchCodeChef() {
-    if (data?.codechef) fetchCodeChefStats(data.codechef);
-    else addMsg("error", "No CodeChef link provided", "⚠️");
-  }
-  function onFetchGithub() {
-    if (data?.github) fetchGithubStats(data.github);
-    else addMsg("error", "No GitHub link provided", "⚠️");
   }
 
   // ---------- Prevent logout from setting data null ----------
@@ -532,54 +553,7 @@ Summary: ${data.summary || "N/A"}
               </button>
 
               {/* helper action buttons */}
-              <button
-                onClick={() => {
-                  // quick demo: populate data with sample values (helpful for local dev)
-                  setData({
-                    ...initialData,
-                    name: "Kowsalya S",
-                    email: "kowsalya.cs21@bitsathy.ac.in",
-                    phone: "6381071009",
-                    github: "https://github.com/KOWSALYASURESH5",
-                    codechef: "https://www.codechef.com/users/kowsalyacs21",
-                    leetcode: "https://leetcode.com/u/vigneshwaransp/",
-                    linkedin: "linkedin.com/in/kowsalya-s-728801267/",
-                    skills: { technical: ["C", "Python", "HTML", "CSS"], soft: ["Teamwork", "Communication"] },
-                    certificates: ["Data Analysis with Python - IBM cognitiveclass.ai - 2021"],
-                    ats_score: 100,
-                    word_count: 452,
-                    summary:
-                      "To secure a challenging software engineering position in a forward-thinking company that values innovation and offers opportunities for professional growth, where I can apply my expertise in C, Python, and web development to create cutting-edge software solutions.",
-                    // sample simplified platform responses
-                    leetcode_stats: {
-                      profile: { Username: "vignesh", Easy: "30", Medium: "20", Hard: "5", Total_Solved: "55", Languages: ["Python", "C++"] },
-                      analysis: { sentiment: "neutral", reason: "Good progress", metrics: { problem_distribution: "Easy: 54.5%, Medium: 36.4%, Hard: 9.1%", total_problems: 55, languages_used: 2, difficulty_rating: 1.41 }},
-                      activity_graph: [],
-                    },
-                    codechef_stats: {
-                      profile: { Profile_URL: "https://www.codechef.com/users/sample", Username: "sample", Rating: 1500, Star_Rating: "3.5", Global_Rank: 12345, Country_Rank: 123, Learning_Paths: [], Practice_Paths: [], Badges: [], Total_Solved: 10 }
-                    },
-                    github_stats: {
-                      username: "KOWSALYASURESH5",
-                      github_metrics: { total_original_repos: 12, total_forked_repos: 3, total_contributions_1yr: 230, active_days_1yr: 90, activity_graph: [] },
-                      // optional PR metrics
-                      total_prs_submitted: 5
-                    }
-                  });
-                  addMsg("success", "Filled sample data (dev demo).", "🧪");
-                }}
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  border: "none",
-                  fontWeight: 700,
-                  background: "#10b981",
-                  color: "#fff",
-                  marginLeft: 8,
-                }}
-              >
-                Fill Sample
-              </button>
+             
             </div>
 
             <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -663,9 +637,7 @@ Summary: ${data.summary || "N/A"}
                     <a href={data.github} target="_blank" rel="noopener noreferrer" style={{ color: "#1d4ed8", textDecoration: "underline" }}>
                       {data.github}
                     </a>{" "}
-                    <button onClick={onFetchGithub} style={{ marginLeft: 8, padding: "4px 8px", borderRadius: 6, border: "none", background: "#2563eb", color: "#fff", cursor: "pointer" }}>
-                      Fetch GitHub
-                    </button>
+               
                   </li>
                 ) : null}
 
@@ -675,9 +647,7 @@ Summary: ${data.summary || "N/A"}
                     <a href={data.leetcode} target="_blank" rel="noopener noreferrer" style={{ color: "#1d4ed8", textDecoration: "underline" }}>
                       {data.leetcode}
                     </a>{" "}
-                    <button onClick={onFetchLeetCode} style={{ marginLeft: 8, padding: "4px 8px", borderRadius: 6, border: "none", background: "#2563eb", color: "#fff", cursor: "pointer" }}>
-                      Fetch LeetCode
-                    </button>
+
                   </li>
                 ) : null}
 
@@ -687,9 +657,7 @@ Summary: ${data.summary || "N/A"}
                     <a href={data.codechef} target="_blank" rel="noopener noreferrer" style={{ color: "#1d4ed8", textDecoration: "underline" }}>
                       {data.codechef}
                     </a>{" "}
-                    <button onClick={onFetchCodeChef} style={{ marginLeft: 8, padding: "4px 8px", borderRadius: 6, border: "none", background: "#2563eb", color: "#fff", cursor: "pointer" }}>
-                      Fetch CodeChef
-                    </button>
+                
                   </li>
                 ) : null}
               </ul>
@@ -779,7 +747,7 @@ Summary: ${data.summary || "N/A"}
                     const activity = data.leetcode_stats.activity_graph || [];
                     const chart = buildChartFromActivity(activity, "LeetCode activity");
                     if (!chart) {
-                      return <div style={{ color: "#6b7280", padding: 32 }}>No per-day activity data available for LeetCode.</div>;
+                      return <div style={{ color: "#6b7280", padding: 2 }}>No per-day activity data available for LeetCode.</div>;
                     }
                     return <Line options={chart.options} data={chart.dataset} />;
                   })()}
@@ -898,7 +866,7 @@ Summary: ${data.summary || "N/A"}
                     const activity = data.github_stats.github_metrics?.activity_graph || [];
                     const chart = buildChartFromActivity(activity, "Contributions");
                     if (!chart) {
-                      return <div style={{ color: "#6b7280", padding: 32 }}>No per-day activity available for GitHub. Provide a GitHub token to enable GraphQL access from backend.</div>;
+                      return <div style={{ color: "#6b7280", padding: 2 }}>No per-day activity available for GitHub. Provide a GitHub token to enable GraphQL access from backend.</div>;
                     }
                     return <Line options={chart.options} data={chart.dataset} />;
                   })()}

@@ -24,6 +24,14 @@ from bs4 import BeautifulSoup
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 GITHUB_TOKEN_ENV = os.getenv("GITHUB_TOKEN")
+# MongoDB connection (async)
+from motor.motor_asyncio import AsyncIOMotorClient
+
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "resume_analyzer")
+
+mongo_client = AsyncIOMotorClient(MONGO_URI)
+db = mongo_client[MONGO_DB_NAME]
 
 # try to initialize openrouter client (openai wrapper)
 openrouter_client = None
@@ -245,7 +253,19 @@ Resume text:
         ats_score = min(100, tech_count * 10 + 30)
 
         # attach computed fields
-        data_out = {**data, "ats_score": ats_score}
+        data_out = {**data, "ats_score": ats_score}        # ----------------------------
+        # Save analyzed report to MongoDB
+        # ----------------------------
+        try:
+            await db.reports.insert_one({
+                "filename": file.filename,
+                "data": data_out,
+                "uploaded_at": datetime.utcnow()
+            })
+            print("✅ Report saved to MongoDB successfully")
+        except Exception as e:
+            print("⚠️ MongoDB insert failed:", e)
+
         return {"data": data_out, "ats_score": ats_score, "word_count": len(text.split())}
 
     except Exception as e:
@@ -408,7 +428,46 @@ def extract_leetcode_data(username: str):
         if profile:
             result['Ranking'] = profile.get('ranking')
             result['Reputation'] = profile.get('reputation')
-            result['Rating'] = profile.get('starRating')
+            result['Rating'] = profile.get('starRating')        # -------------------------
+        # Fetch daily submission calendar (real activity)
+        # -------------------------
+        try:
+            year = datetime.now().year
+            calendar_query = """
+            query userProfileCalendar($username: String!, $year: Int!) {
+              matchedUser(username: $username) {
+                userCalendar(year: $year) {
+                  submissionCalendar
+                }
+              }
+            }
+            """
+            cal_resp = requests.post(
+                api_url,
+                headers=headers,
+                json={"query": calendar_query, "variables": {"username": username, "year": year}},
+                timeout=10,
+            )
+            if cal_resp.status_code == 200:
+                cal_json = cal_resp.json()
+                cal_str = (
+                    cal_json.get("data", {})
+                    .get("matchedUser", {})
+                    .get("userCalendar", {})
+                    .get("submissionCalendar")
+                )
+                if cal_str:
+                    cal_data = json.loads(cal_str)
+                    activity_graph = []
+                    for ts, count in cal_data.items():
+                        date = datetime.utcfromtimestamp(int(ts)).strftime("%Y-%m-%d")
+                        activity_graph.append({"date": date, "count": count})
+                    activity_graph.sort(key=lambda x: x["date"])
+                    result["activity_graph"] = activity_graph
+        except Exception as e:
+            print("⚠️ LeetCode calendar fetch failed:", e)
+            result["activity_graph"] = []
+
         return result
     except Exception as e:
         return {"error": f"Failed to parse LeetCode response: {str(e)}"}
@@ -432,8 +491,12 @@ def leetcode_endpoint(username: str):
 
     # LeetCode doesn't expose a straightforward per-day contributions calendar for public requests.
     # We'll return an empty activity_graph so frontend can handle gracefully, or you can populate from other sources.
-    activity_graph = []  # Keep empty by default
+    # LeetCode doesn't expose a straightforward per-day contributions calendar for public requests.
+    # We'll return an empty activity_graph so frontend can handle gracefully, or you can populate from other sources.
+    activity_graph = profile.get("activity_graph", [])
     return {"profile": profile, "analysis": analysis, "activity_graph": activity_graph}
+
+
 
 
 # -------------------------
