@@ -21,7 +21,7 @@ from statistics import mean
 from bs4 import BeautifulSoup
 
 # load env
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 GITHUB_TOKEN_ENV = os.getenv("GITHUB_TOKEN")
 
