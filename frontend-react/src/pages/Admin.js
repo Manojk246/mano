@@ -21,9 +21,9 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip,
  * Notes:
  * - Expects backend running on http://127.0.0.1:8000
  * - POST /upload_resume returns: { data: { ...parsedResume... , ats_score, word_count } }
- * - GET /analyze_leetcode/:username returns { profile, analysis, activity_graph }
- * - GET /analyze_codechef/:username returns { profile }
- * - GET /analyze_github/:user_input?token=... returns { username, github_metrics }
+ * - GET /leetcode/analyze_leetcode/:username returns { profile, analysis, activity_graph }
+ * - GET /codechef/analyze_codechef/:username returns { profile }
+ * - GET /github/analyze_github/:user_input?token=... returns { username, github_metrics }
  *
  * This is a single-file component intended to replace your previous Admin.jsx.
  * It preserves UI layout, messages, history, and adds charts for activity.
@@ -117,11 +117,11 @@ function addMsg(type, text, icon) {
       return;
     }
     try {
-      addMsg("processing", "⏳ Uploading resume...", "⏳");
+      addMsg("processing", " Uploading resume...", "⏳");
 const formData = new FormData();
 formData.append("file", selectedFile);
 
-const res = await fetch(`${backend}/upload_resume`, {
+const res = await fetch(`${backend}/resume/upload_resume`, {
   method: "POST",
   body: formData,
 });
@@ -250,7 +250,7 @@ Summary: ${data.summary || "N/A"}
     activeFetchRef.current[tag] = true;
     addMsg("processing", `Fetching LeetCode stats for ${username}...`, "⏳");
     try {
-      const res = await fetch(`${backend}/analyze_leetcode/${username}`);
+      const res = await fetch(`${backend}/leetcode/analyze_leetcode/${username}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Unknown error" }));
         addMsg("error", `LeetCode fetch error: ${err.error || res.statusText}`, "❌");
@@ -282,7 +282,7 @@ setTimeout(() => clearMsgs(), 2000);
     activeFetchRef.current[tag] = true;
     addMsg("processing", `Fetching CodeChef profile for ${username}...`, "⏳");
     try {
-      const res = await fetch(`${backend}/analyze_codechef/${username}`);
+      const res = await fetch(`${backend}/codechef/analyze_codechef/${username}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Unknown error" }));
         addMsg("error", `CodeChef fetch error: ${err.error || res.statusText}`, "❌");
@@ -315,7 +315,7 @@ setTimeout(() => clearMsgs(), 2000);
     addMsg("processing", `Fetching GitHub metrics for ${username}...`, "⏳");
     try {
       // if token is provided, append as query param
-      const url = token ? `${backend}/analyze_github/${username}?token=${encodeURIComponent(token)}` : `${backend}/analyze_github/${username}`;
+      const url = token ? `${backend}/github/analyze_github/${username}?token=${encodeURIComponent(token)}` : `${backend}/github/analyze_github/${username}`;
       const res = await fetch(url);
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Unknown error" }));
