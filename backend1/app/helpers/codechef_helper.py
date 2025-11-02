@@ -67,17 +67,28 @@ def extract_codechef_paths_and_badges(profile_url: str):
         return clean_topics
 
     # -------- badges --------
+        # -------- badges (robust method) --------
     badges = []
     try:
-        badge_section = soup.find('h2', string=lambda t: t and 'Badges' in t)
-        if badge_section:
-            parent = badge_section.parent
-            for div in parent.find_all("div"):
-                txt = div.get_text(" ", strip=True)
-                if 'badge' in txt.lower():
-                    badges.append(txt)
-    except Exception:
-        pass
+        # Look for image alt text or span tags containing badge names
+        badge_imgs = soup.find_all("img", alt=True)
+        for img in badge_imgs:
+            alt = img.get("alt", "").strip()
+            if alt and "badge" in alt.lower():
+                badges.append(alt)
+
+        # Also check for divs/spans with class names or text containing 'badge'
+        badge_spans = soup.find_all(["div", "span"], string=lambda t: t and "badge" in t.lower())
+        for span in badge_spans:
+            txt = span.get_text(" ", strip=True)
+            if txt and txt not in badges:
+                badges.append(txt)
+
+        # Remove duplicates and keep clean names
+        badges = list(dict.fromkeys([b.replace("Badge", "").strip().title() for b in badges if len(b) < 100]))
+    except Exception as e:
+        print("⚠️ Badge parsing error:", e)
+
 
     learning_paths = extract_path_topics_with_percentage(soup, "Learning Paths")
     practice_paths = extract_path_topics_with_percentage(soup, "Practice Paths")
