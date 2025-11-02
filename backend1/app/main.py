@@ -14,6 +14,7 @@ from app.routes.analyze_all import router as analyze_all_router
 from app.routes.admin_resume_filter import router as admin_filter_router
 from app.routes.auth_routes import router as auth_router  # ✅ New Auth Route
 from app.routes.user import router as user_router 
+from app.routes.ai_routes import router as ai_router
 
 # -------------------------
 # FastAPI App Initialization
@@ -46,7 +47,8 @@ app.include_router(github_router, prefix="/github", tags=["GitHub"])
 app.include_router(analyze_all_router, tags=["Analyze All"])
 app.include_router(admin_filter_router, prefix="/admin", tags=["Admin Filter"])
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])  
-app.include_router(user_router) 
+app.include_router(user_router)
+app.include_router(ai_router) 
 
 # -------------------------
 # Run Server

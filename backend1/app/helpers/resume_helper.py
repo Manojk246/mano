@@ -1,5 +1,6 @@
 # app/helpers/resume_helper.py
 # Combines your resume AI logic + detailed ATS scoring
+# Updated: robust language normalization + consistent OpenRouter usage
 
 import json
 import io
@@ -25,9 +26,26 @@ def normalize_languages(languages):
     }
     normalized = []
     for lang in (languages or []):
+        if not lang:
+            continue
         key = str(lang).strip().lower()
-        if key in standard_langs and standard_langs[key] not in normalized:
-            normalized.append(standard_langs[key])
+        # some AI outputs might be like "Tamil (native), English (fluent)"
+        key = re.sub(r"[\(\)\d%]", "", key).strip()
+        # try splitting composite tokens
+        parts = re.split(r"[,;/\|]+", key)
+        for p in parts:
+            pkey = p.strip().lower()
+            # handle common alternatives
+            if pkey in standard_langs:
+                val = standard_langs[pkey]
+                if val not in normalized:
+                    normalized.append(val)
+            else:
+                # sometimes AI outputs short forms or capitalized forms
+                for k, v in standard_langs.items():
+                    if pkey == k or pkey == v.lower():
+                        if v not in normalized:
+                            normalized.append(v)
     return normalized
 
 
@@ -121,7 +139,11 @@ def calculate_ats_score(data, text, job_description=None, normalized_languages=N
     formatting_penalty = 0
     if re.search(r"<table|</table>", text.lower()): formatting_penalty += 10
     if re.search(r"\.(png|jpg|jpeg|svg)", text.lower()): formatting_penalty += 10
-    if len(max(text.split("\n"), key=len)) > 180: formatting_penalty += 5
+    try:
+        if len(max(text.split("\n"), key=len)) > 180:
+            formatting_penalty += 5
+    except Exception:
+        pass
     score_details["ATS Formatting Score"] = 10 - formatting_penalty if formatting_penalty < 10 else 0
 
     # JD matching
@@ -147,8 +169,6 @@ def calculate_ats_score(data, text, job_description=None, normalized_languages=N
 
 # -------------------------
 # Core Resume Processor
-# -------------------------# -------------------------
-# Core Resume Processor (Fixed)
 # -------------------------
 async def process_resume_file(upload_file):
     """Handle resume PDF upload + AI parsing + ATS scoring + DB save."""
@@ -166,8 +186,11 @@ async def process_resume_file(upload_file):
         if not openrouter_client:
             return {"error": "AI client not configured (missing OPENROUTER_API_KEY)."}
 
+        # Truncate long documents for model context safety (you already used similar earlier)
+        max_chars = 80000  # conservative
+        prompt_text = text if len(text) <= max_chars else text[:max_chars] + "\n...[Truncated for AI]..."
+
         # ---- AI extraction ----
-        
         prompt = f"""
 Extract structured resume info and return valid JSON ONLY:
 {{
@@ -209,15 +232,15 @@ Extract structured resume info and return valid JSON ONLY:
   "summary": ""
 }}
 Resume text:
-{text}
+{prompt_text}
 """
 
-        # ---- Call AI model ----
+        # ---- Call AI model via openrouter_client ----
         try:
             response = openrouter_client.chat.completions.create(
                 model="gpt-4.1-mini",
                 messages=[
-                    {"role": "system", "content": "Return valid JSON only."},
+                    {"role": "system", "content": "Return valid JSON only. Do not include commentary."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.2,
@@ -233,10 +256,29 @@ Resume text:
         except Exception as e:
             return {"error": f"Failed to parse AI JSON: {str(e)}", "raw": ai_output}
 
-        # ---- Normalize languages ----
-        langs = normalize_languages(data.get("languages", []))
+        # ---- Normalize languages (robust) ----
+        raw_langs = data.get("languages", [])
+        if isinstance(raw_langs, str):
+            raw_langs = re.split(r"[,;/]| and ", raw_langs)
+        langs = normalize_languages([lang.strip() for lang in raw_langs if lang and str(lang).strip()])
+
+        # If AI missed languages or returned unexpected value, detect from text
         if not langs:
-            langs = ["English"]
+            detected = []
+            standard_langs = {
+                "english": "English", "tamil": "Tamil", "hindi": "Hindi",
+                "telugu": "Telugu", "malayalam": "Malayalam", "kannada": "Kannada",
+                "french": "French", "german": "German", "spanish": "Spanish",
+                "bengali": "Bengali", "marathi": "Marathi", "punjabi": "Punjabi",
+                "gujarati": "Gujarati", "urdu": "Urdu", "oriya": "Oriya", "nepali": "Nepali"
+            }
+            tlower = text.lower()
+            for key, val in standard_langs.items():
+                # match exact language token in resume text (word boundary)
+                if re.search(rf"\b{re.escape(key)}\b", tlower):
+                    detected.append(val)
+            langs = detected if detected else ["English"]
+
         data["languages"] = langs
 
         # ---- Compute ATS ----
@@ -245,7 +287,7 @@ Resume text:
         # ---- Save to MongoDB ----
         try:
             await db.reports.insert_one({
-                "filename": upload_file.filename,
+                "filename": getattr(upload_file, "filename", "uploaded_resume"),
                 "data": data,
                 "ats_breakdown": ats["ats_breakdown"],
                 "ats_score": ats["ats_score"],
@@ -268,16 +310,18 @@ Resume text:
         print("❌ Error in process_resume_file:", traceback.format_exc())
         return {"error": str(e)}
 
+
+# -------------------------
+# Text-only extractor (use when you pass resume text instead of PDF)
+# -------------------------
 async def extract_resume_data(text: str):
     """
     Extract structured resume data using OpenRouter AI.
     Returns parsed JSON with keys like name, email, education, etc.
     """
-    from openai import OpenAI
-    import json
-    import os
+    if not openrouter_client:
+        return {}
 
-    client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=os.getenv("OPENROUTER_API_KEY"))
 
     prompt = f"""
 Extract structured resume info and return valid JSON ONLY:
@@ -296,17 +340,46 @@ Extract structured resume info and return valid JSON ONLY:
   "summary": ""
 }}
 Resume text:
-{text}
+{prompt_text}
 """
-
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    raw = completion.choices[0].message.content.strip()
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        print("⚠️ Invalid JSON returned by AI:", raw)
+        completion = openrouter_client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": "Return valid JSON only."}, {"role": "user", "content": prompt}],
+            temperature=0.2,
+        )
+        raw = completion.choices[0].message.content.strip()
+    except Exception as exc:
+        print("⚠️ OpenRouter request failed in extract_resume_data:", exc)
         return {}
+
+    raw_clean = raw.replace("```json", "").replace("```", "").strip()
+    try:
+        data = json.loads(raw_clean)
+    except Exception:
+        print("⚠️ Invalid JSON returned by AI (extract_resume_data):", raw_clean)
+        return {}
+
+    # Normalize languages same as process function
+    raw_langs = data.get("languages", [])
+    if isinstance(raw_langs, str):
+        raw_langs = re.split(r"[,;/]| and ", raw_langs)
+    langs = normalize_languages([lang.strip() for lang in raw_langs if lang and str(lang).strip()])
+
+    if not langs:
+        detected = []
+        standard_langs = {
+            "english": "English", "tamil": "Tamil", "hindi": "Hindi",
+            "telugu": "Telugu", "malayalam": "Malayalam", "kannada": "Kannada",
+            "french": "French", "german": "German", "spanish": "Spanish",
+            "bengali": "Bengali", "marathi": "Marathi", "punjabi": "Punjabi",
+            "gujarati": "Gujarati", "urdu": "Urdu", "oriya": "Oriya", "nepali": "Nepali"
+        }
+        tlower = text.lower()
+        for key, val in standard_langs.items():
+            if re.search(rf"\b{re.escape(key)}\b", tlower):
+                detected.append(val)
+        langs = detected if detected else ["English"]
+
+    data["languages"] = langs
+    return data

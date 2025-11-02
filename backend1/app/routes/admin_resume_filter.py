@@ -6,13 +6,41 @@ from app.helpers.resume_helper import process_resume_file
 
 router = APIRouter()
 
+# ---------------------------------------------------------
+# 🔧 Helper functions
+# ---------------------------------------------------------
+def parse_percentage(value):
+    """Convert string percentage (like '92.6%') to float."""
+    if not value:
+        return 0.0
+    try:
+        return float(str(value).replace("%", "").strip())
+    except:
+        return 0.0
+
+def parse_cgpa(value):
+    """Convert CGPA value (like '8.32 (upto 5th semester)') to float."""
+    if not value:
+        return 0.0
+    try:
+        # Extract only first numeric portion
+        import re
+        match = re.search(r"\d+(\.\d+)?", str(value))
+        return float(match.group()) if match else 0.0
+    except:
+        return 0.0
+
+
+# ---------------------------------------------------------
+# 🧠 Resume Filtering Endpoint
+# ---------------------------------------------------------
 @router.post("/filter_uploaded_resumes")
 async def filter_uploaded_resumes(
     files: List[UploadFile] = File(...),
-    cgpa: Optional[str] = Form(None),
-    tenth: Optional[str] = Form(None),
-    twelfth: Optional[str] = Form(None),
-    ats: Optional[str] = Form(None),
+    cgpa: Optional[float] = Form(None),
+    tenth: Optional[float] = Form(None),
+    twelfth: Optional[float] = Form(None),
+    ats: Optional[float] = Form(None),
     skills: Optional[str] = Form(None),
     language: Optional[str] = Form(None),
     department: Optional[str] = Form(None),
@@ -21,15 +49,12 @@ async def filter_uploaded_resumes(
     results = []
     skill_list = [s.strip().lower() for s in skills.split(",")] if skills else []
 
-    # ✅ Convert filters safely
-    try:
-        cgpa = float(cgpa) if cgpa else None
-        tenth = float(tenth) if tenth else None
-        twelfth = float(twelfth) if twelfth else None
-        ats = float(ats) if ats else None
-    except ValueError:
-        cgpa = tenth = twelfth = ats = None
+    # ✅ Normalize filters
+    language = language.lower().strip() if language else None
+    department = department.lower().strip() if department else None
+    degree = degree.lower().strip() if degree else None
 
+    # ✅ Process each uploaded resume
     for file in files:
         parsed = await process_resume_file(file)
         if not parsed or parsed.get("error"):
@@ -37,28 +62,46 @@ async def filter_uploaded_resumes(
 
         data = parsed.get("data", {})
         ats_score = parsed.get("ats_score", 0)
-        edu = data.get("education", {})
-        langs = [lang.lower() for lang in data.get("languages", [])]
-        tech_skills = [s.lower() for s in data.get("skills", {}).get("technical", [])]
+        edu = data.get("education", {}) or {}
+        langs = [lang.lower().strip() for lang in data.get("languages", []) if lang]
+        tech_skills = [s.lower().strip() for s in data.get("skills", {}).get("technical", []) if s]
 
-        # ---------------- FILTER CONDITIONS ----------------
-        if cgpa and float(edu.get("cgpa", 0)) < cgpa:
+        # ---------------------------------------------------
+        # 🧮 Convert Numeric Fields (with safe parsing)
+        # ---------------------------------------------------
+        tenth_value = parse_percentage(edu.get("10th", {}).get("percentage"))
+        twelfth_value = parse_percentage(edu.get("12th", {}).get("percentage"))
+        cgpa_value = parse_cgpa(edu.get("bachelor", {}).get("cgpa"))
+
+        # ---------------------------------------------------
+        # 🚫 Filter Logic
+        # ---------------------------------------------------
+        if cgpa is not None and cgpa_value < cgpa:
             continue
-        if tenth and float(edu.get("tenth_percentage", 0)) < tenth:
+        if tenth is not None and tenth_value < tenth:
             continue
-        if twelfth and float(edu.get("twelfth_percentage", 0)) < twelfth:
+        if twelfth is not None and twelfth_value < twelfth:
             continue
-        if ats and ats_score < ats:
-            continue
-        if language and language.lower() not in langs:
-            continue
-        if department and department.lower() not in str(edu.get("department", "")).lower():
-            continue
-        if degree and degree.lower() not in str(edu.get("degree", "")).lower():
-            continue
-        if skill_list and not all(skill in tech_skills for skill in skill_list):
+        if ats is not None and ats_score < ats:
             continue
 
+        # ✅ Language filter (any language match)
+        if language and not any(language in l for l in langs):
+            continue
+
+        # ✅ Department and Degree matching (case-insensitive)
+        if department and department not in str(edu.get("bachelor", {}).get("degree", "")).lower():
+            continue
+        if degree and degree not in str(edu.get("bachelor", {}).get("degree", "")).lower():
+            continue
+
+        # ✅ Skills filter (all input skills must appear)
+        if skill_list and not all(any(skill in s for s in tech_skills) for skill in skill_list):
+            continue
+
+        # ---------------------------------------------------
+        # ✅ Passed all filters — Add to Results
+        # ---------------------------------------------------
         results.append({
             "filename": file.filename,
             "name": data.get("name"),
@@ -68,4 +111,7 @@ async def filter_uploaded_resumes(
             "languages": langs,
         })
 
-    return {"count": len(results), "results": results}
+    return {
+        "count": len(results),
+        "results": results,
+    }
