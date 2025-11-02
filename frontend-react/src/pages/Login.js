@@ -6,33 +6,42 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch("http://127.0.0.1:8000/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+  // login.js (replace handleLogin)
+const handleLogin = async (e) => {
+  e.preventDefault();
+  try {
+    const res = await fetch("http://127.0.0.1:8000/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (!res.ok) {
-        alert(data.detail || "Login failed ❌");
-        return;
-      }
-
-      alert(`✅ ${data.message}`);
-
-      // Redirect based on user role
-      if (data.role === "admin") navigate("/admin");
-      else if (data.role === "trainer") navigate("/trainer");
-      else navigate("/user");
-    } catch (err) {
-      console.error(err);
-      alert("Error connecting to server ⚠️");
+    if (!res.ok) {
+      alert(data.detail || "Login failed ❌");
+      return;
     }
-  };
+
+    // prefer backend to return user object; fallback to provided email
+    const returnedEmail = data.user?.email || email;
+    // store normalized/lowercase email
+    localStorage.setItem("email", String(returnedEmail).toLowerCase());
+    // optionally store minimal user info
+    if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
+
+    alert(`✅ ${data.message}`);
+
+    // Redirect based on user role
+    if (data.role === "admin") navigate("/admin");
+    else if (data.role === "trainer") navigate("/trainer");
+    else navigate("/user");
+  } catch (err) {
+    console.error(err);
+    alert("Error connecting to server ⚠️");
+  }
+};
+
 
   return (
     <div style={pageStyle}>

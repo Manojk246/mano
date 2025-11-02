@@ -167,6 +167,7 @@ async def process_resume_file(upload_file):
             return {"error": "AI client not configured (missing OPENROUTER_API_KEY)."}
 
         # ---- AI extraction ----
+        
         prompt = f"""
 Extract structured resume info and return valid JSON ONLY:
 {{
@@ -266,3 +267,46 @@ Resume text:
         import traceback
         print("❌ Error in process_resume_file:", traceback.format_exc())
         return {"error": str(e)}
+
+async def extract_resume_data(text: str):
+    """
+    Extract structured resume data using OpenRouter AI.
+    Returns parsed JSON with keys like name, email, education, etc.
+    """
+    from openai import OpenAI
+    import json
+    import os
+
+    client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=os.getenv("OPENROUTER_API_KEY"))
+
+    prompt = f"""
+Extract structured resume info and return valid JSON ONLY:
+{{
+  "name": "", "email": "", "phone": "",
+  "linkedin": "", "github": "", "leetcode": "", "codechef": "",
+  "languages": [],
+  "education": {{
+      "10th": {{"school": "", "location": "", "year": "", "percentage": ""}},
+      "12th": {{"school": "", "location": "", "year": "", "percentage": ""}},
+      "bachelor": {{"institute": "", "location": "", "degree": "", "expected_graduation": "", "cgpa": ""}}
+  }},
+  "skills": {{"technical": [], "soft": []}},
+  "certificates": [],
+  "role_match": "",
+  "summary": ""
+}}
+Resume text:
+{text}
+"""
+
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    raw = completion.choices[0].message.content.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        print("⚠️ Invalid JSON returned by AI:", raw)
+        return {}

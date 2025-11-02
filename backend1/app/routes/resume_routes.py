@@ -14,3 +14,7 @@ async def upload_resume_endpoint(file: UploadFile = File(...)):
         return JSONResponse(result, status_code=400)
     return result
 
+# ==========================
+# ✅ Exported for user.py
+# ==========================
+from app.helpers.resume_helper import extract_resume_data, process_resume_file

@@ -8,7 +8,6 @@ import {
   Upload,
   LogOut,
   Bot,
-  Send,
   BarChart,
   Github,
   Code,
@@ -16,50 +15,41 @@ import {
   User,
 } from "lucide-react";
 
-// ============================
-// 🌟 USER DASHBOARD COMPONENT
-// ============================
 export default function UserDashboard() {
-  // -----------------------------
-  // STATES
-  // -----------------------------
   const [user, setUser] = useState({});
   const [loading, setLoading] = useState(true);
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [ats, setAts] = useState(null);
-  const [chatHistory, setChatHistory] = useState([]);
-  const [message, setMessage] = useState("");
-  const [sending, setSending] = useState(false);
-  const chatEndRef = useRef(null);
-
+  const [atsBreakdown, setAtsBreakdown] = useState(null);
+  const [parsed, setParsed] = useState(null);
+  const [wordCount, setWordCount] = useState(0);
   const [github, setGithub] = useState(null);
   const [leetcode, setLeetcode] = useState(null);
   const [codechef, setCodechef] = useState(null);
 
   const email = localStorage.getItem("email");
 
-  // -----------------------------
-  // 🧠 FETCH USER INFO
-  // -----------------------------
+  // 🧠 Fetch user info
   useEffect(() => {
     const fetchUserData = async () => {
+      const storedEmail = localStorage.getItem("email");
+      if (!storedEmail) return setLoading(false);
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/user/info/${email}`);
+        const res = await axios.get(`http://127.0.0.1:8000/user/info/${storedEmail}`);
         setUser(res.data.user);
-      } catch (error) {
-        console.error("Error fetching user:", error);
+      } catch (err) {
+        console.error("User fetch error:", err);
       } finally {
         setLoading(false);
       }
     };
     fetchUserData();
-  }, [email]);
+  }, []);
 
-  // -----------------------------
-  // 💾 FETCH DASHBOARD DATA (GitHub / LeetCode / CodeChef)
-  // -----------------------------
+  // 💾 Fetch GitHub, LeetCode, CodeChef
   useEffect(() => {
+    if (!email) return;
     const fetchAll = async () => {
       try {
         const [g, l, c] = await Promise.all([
@@ -71,93 +61,53 @@ export default function UserDashboard() {
         setLeetcode(l.data);
         setCodechef(c.data);
       } catch (err) {
-        console.warn("Profile data not found yet — skipping...");
+        console.warn("Profile fetch error:", err);
       }
     };
     fetchAll();
   }, [email]);
 
-  // -----------------------------
-  // 📄 RESUME UPLOAD HANDLER
-  // -----------------------------
+  // 📄 Resume Upload Handler
   const handleUpload = async () => {
-    if (!file) {
-      alert("Please select a file first!");
-      return;
-    }
+    if (!file) return alert("Please select a file!");
+
     const formData = new FormData();
     formData.append("email", email);
     formData.append("file", file);
 
     try {
       setUploading(true);
-      const res = await axios.post(
-        "http://127.0.0.1:8000/user/upload_resume",
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
+      const res = await axios.post("http://127.0.0.1:8000/user/upload_resume", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      // 🧠 Update states
       setAts(res.data.ats_score);
-    } catch (error) {
-      console.error("Error uploading resume:", error);
-      alert("Upload failed. Check backend logs.");
+      setAtsBreakdown(res.data.ats_breakdown);
+      setParsed(res.data.structured_info);
+      setWordCount(res.data.word_count);
+    } catch (err) {
+      console.error("Upload failed:", err);
+      alert("Resume upload failed!");
     } finally {
       setUploading(false);
     }
   };
 
-  // -----------------------------
-  // 🤖 CHATBOT HANDLER
-  // -----------------------------
-  const sendMessage = async () => {
-    if (!message.trim()) return;
-
-    const newChat = [
-      ...chatHistory,
-      { sender: "user", text: message },
-      { sender: "bot", text: "Typing..." },
-    ];
-    setChatHistory(newChat);
-    setMessage("");
-    setSending(true);
-
-    try {
-      const res = await axios.post("http://127.0.0.1:8000/chat/ai", {
-        email,
-        message,
-      });
-      const updated = [...chatHistory, { sender: "user", text: message }];
-      updated.push({ sender: "bot", text: res.data.reply });
-      setChatHistory(updated);
-    } catch (error) {
-      console.error("Chat error:", error);
-      setChatHistory([
-        ...chatHistory,
-        { sender: "user", text: message },
-        {
-          sender: "bot",
-          text: "⚠️ Error reaching AI. Check backend or API key setup.",
-        },
-      ]);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
-
-  // -----------------------------
-  // 🚪 LOGOUT HANDLER
-  // -----------------------------
+  // 🚪 Logout
   const handleLogout = () => {
     localStorage.clear();
     window.location.href = "/login";
   };
 
-  // -----------------------------
-  // ⏳ LOADING SCREEN
-  // -----------------------------
+  // 🧹 Safe helper
+  const safeJoin = (arr, label = "None") => {
+    if (Array.isArray(arr) && arr.length > 0) {
+      return arr.join(", ");
+    }
+    return label;
+  };
+
   if (loading)
     return (
       <div className="flex justify-center items-center h-screen bg-gray-900 text-white">
@@ -165,20 +115,15 @@ export default function UserDashboard() {
       </div>
     );
 
-  // ============================
-  // 🖥️ DASHBOARD UI
-  // ============================
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6"
     >
-      {/* HEADER */}
+      {/* Header */}
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">
-          Welcome back, {user.name || "User"} 👋
-        </h1>
+        <h1 className="text-3xl font-bold">Welcome, {user.name || "User"} 👋</h1>
         <Button
           onClick={handleLogout}
           className="bg-red-600 hover:bg-red-700 text-white flex items-center gap-2"
@@ -187,9 +132,9 @@ export default function UserDashboard() {
         </Button>
       </div>
 
-      {/* GRID LAYOUT */}
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* LEFT PANEL */}
+        {/* Left Column */}
         <div className="col-span-1 space-y-6">
           {/* Profile */}
           <Card className="bg-gray-800 border border-gray-700">
@@ -197,11 +142,11 @@ export default function UserDashboard() {
               <h2 className="text-xl font-semibold mb-3 text-blue-400 flex items-center gap-2">
                 <User size={18} /> Profile
               </h2>
-              <p><strong>Name:</strong> {user.name}</p>
-              <p><strong>Email:</strong> {user.email}</p>
-              <p><strong>Role:</strong> {user.role || "Student"}</p>
-              <p><strong>Register Number:</strong> {user.register_number}</p>
-              <p><strong>Phone:</strong> {user.phone}</p>
+              <p><b>Name:</b> {user.name || "N/A"}</p>
+              <p><b>Email:</b> {user.email || "N/A"}</p>
+              <p><b>Role:</b> {user.role || "N/A"}</p>
+              <p><b>Register No:</b> {user.register_number || "N/A"}</p>
+              <p><b>Phone:</b> {user.phone || "N/A"}</p>
             </CardContent>
           </Card>
 
@@ -213,7 +158,6 @@ export default function UserDashboard() {
               </h2>
               <input
                 type="file"
-                accept=".pdf,.txt"
                 onChange={(e) => setFile(e.target.files[0])}
                 className="text-sm text-gray-300 border border-gray-600 p-2 rounded-lg w-full mb-3"
               />
@@ -236,140 +180,55 @@ export default function UserDashboard() {
               {ats && (
                 <div className="mt-4 bg-gray-700 p-3 rounded-lg">
                   <h3 className="text-lg font-semibold text-yellow-400">
-                    ATS Score: {ats.score}%
+                    ATS Score: {ats || 0}%
                   </h3>
-                  <p className="text-green-400 mt-2">
-                    ✅ Matched: {ats.matched.join(", ") || "None"}
+                  <p className="text-gray-300 mt-1 text-sm">
+                    Word Count: {wordCount || 0}
                   </p>
-                  <p className="text-red-400">
-                    ❌ Missing: {ats.missing.join(", ") || "None"}
-                  </p>
-                  <ul className="list-disc ml-5 text-sm text-gray-300 mt-2">
-                    {ats.tips.map((tip, i) => (
-                      <li key={i}>{tip}</li>
-                    ))}
-                  </ul>
+                  {atsBreakdown && (
+                    <div className="mt-3 text-sm">
+                      <h4 className="font-semibold text-green-400">✅ ATS Breakdown:</h4>
+                      <ul className="list-disc ml-5 text-gray-200">
+                        {Object.entries(atsBreakdown).map(([key, val]) => (
+                          <li key={key}>
+                            <b className="capitalize">{key}:</b> {val}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
           </Card>
+
+          {/* Coding Profiles */}
+          
         </div>
 
-        {/* RIGHT PANEL - Insights + Chat */}
+        {/* Right Column */}
         <div className="col-span-2 space-y-6">
-          {/* CODING INSIGHTS */}
-          <Card className="bg-gray-800 border border-gray-700">
-            <CardContent className="p-5">
-              <h2 className="text-xl font-semibold mb-4 text-purple-400 flex items-center gap-2">
-                <BarChart size={18} /> Coding Insights
-              </h2>
+          {parsed && (
+            <Card className="bg-gray-800 border border-gray-700">
+              <CardContent className="p-5">
+                <h2 className="text-xl font-semibold mb-4 text-yellow-400">
+                  🎓 Extracted Resume Info
+                </h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-3 bg-gray-700 rounded-lg">
-                  <div className="flex items-center gap-2 mb-1 text-gray-300">
-                    <Github size={16} /> GitHub
-                  </div>
-                  {github ? (
-                    <>
-                      <p>Repos: {github.repos}</p>
-                      <p>Followers: {github.followers}</p>
-                    </>
-                  ) : (
-                    <p className="text-gray-500 text-sm">Not connected</p>
-                  )}
+                <div className="space-y-2">
+                  <p><b>Technical Skills:</b> {safeJoin(parsed?.skills?.technical)}</p>
+                  <p><b>Soft Skills:</b> {safeJoin(parsed?.skills?.soft)}</p>
+                  <p><b>Languages:</b> {safeJoin(parsed?.languages)}</p>
+                  <p><b>Certificates:</b> {safeJoin(parsed?.certificates)}</p>
+                  <p><b>Summary:</b> {parsed?.summary || "No summary available"}</p>
                 </div>
 
-                <div className="p-3 bg-gray-700 rounded-lg">
-                  <div className="flex items-center gap-2 mb-1 text-gray-300">
-                    <Code size={16} /> LeetCode
-                  </div>
-                  {leetcode ? (
-                    <>
-                      <p>Problems Solved: {leetcode.solved}</p>
-                      <p>Rank: {leetcode.rank}</p>
-                    </>
-                  ) : (
-                    <p className="text-gray-500 text-sm">Not connected</p>
-                  )}
-                </div>
-
-                <div className="p-3 bg-gray-700 rounded-lg">
-                  <div className="flex items-center gap-2 mb-1 text-gray-300">
-                    <Code size={16} /> CodeChef
-                  </div>
-                  {codechef ? (
-                    <>
-                      <p>Rating: {codechef.rating}</p>
-                      <p>Stars: {codechef.stars}</p>
-                    </>
-                  ) : (
-                    <p className="text-gray-500 text-sm">Not connected</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* AI CHATBOT */}
-          <Card className="bg-gray-800 border border-gray-700">
-            <CardContent className="p-5 h-[400px] flex flex-col">
-              <h2 className="text-xl font-semibold mb-3 text-pink-400 flex items-center gap-2">
-                <Bot size={18} /> AI Career Assistant
-              </h2>
-
-              {/* Chat Messages */}
-              <div className="flex-1 overflow-y-auto mb-4 space-y-3 bg-gray-700 p-3 rounded-lg">
-                {chatHistory.length === 0 ? (
-                  <p className="text-gray-400 text-center text-sm mt-20">
-                    👋 Ask anything about resume, placements, or interview prep!
-                  </p>
-                ) : (
-                  chatHistory.map((msg, i) => (
-                    <div
-                      key={i}
-                      className={`flex ${
-                        msg.sender === "user" ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      <div
-                        className={`p-2 rounded-lg max-w-[70%] text-sm ${
-                          msg.sender === "user"
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-600 text-gray-100"
-                        }`}
-                      >
-                        {msg.text}
-                      </div>
-                    </div>
-                  ))
-                )}
-                <div ref={chatEndRef} />
-              </div>
-
-              {/* Input */}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Type your message..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  className="flex-1 p-2 rounded-lg bg-gray-700 text-gray-200 border border-gray-600 focus:outline-none"
-                />
-                <Button
-                  onClick={sendMessage}
-                  disabled={sending}
-                  className="flex items-center gap-2 bg-pink-600 hover:bg-pink-700"
-                >
-                  {sending ? (
-                    <Loader2 className="animate-spin w-4 h-4" />
-                  ) : (
-                    <Send size={18} />
-                  )}
-                  Send
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                <pre className="bg-gray-900 text-gray-200 p-3 rounded-lg overflow-x-auto text-sm mt-4">
+                  {JSON.stringify(parsed, null, 2)}
+                </pre>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </motion.div>
