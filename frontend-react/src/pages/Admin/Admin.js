@@ -924,10 +924,10 @@ setTimeout(() => clearMsgs(), 2000);
           {eduTab === "higher" ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 24 }}>
               {[
-                ["🎓", "Degree", data?.education?.degree],
-                ["🏫", "University", data?.education?.university],
-                ["📅", "Graduation Year", data?.education?.year],
-                ["📊", "GPA/CGPA", data?.education?.gpa],
+                ["🎓", "Degree", data?.education?.bachelor?.degree],
+                ["🏫", "University", data?.education?.bachelor?.institute],
+                ["📅", "Graduation Year", data?.education?.bachelor?.expected_graduation],
+                ["📊", "GPA/CGPA", data?.education?.bachelor?.cgpa],
               ].map(([icon, label, value]) => (
                 <div key={label} style={{ background: "#fff", padding: 20, borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 600, color: "#1f2937", marginBottom: 12 }}>
@@ -941,9 +941,9 @@ setTimeout(() => clearMsgs(), 2000);
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 24 }}>
               {[
-                ["🏫", "School Name", data?.education?.school_name],
-                ["📈", "SSLC %", data?.education?.sslc_percentage],
-                ["📈", "HSC %", data?.education?.hsc_percentage],
+                ["🏫", "School Name", data?.education?.["12th"]?.school],
+                ["📈", "SSLC %", data?.education?.["10th"]?.percentage],
+                ["📈", "HSC %", data?.education?.["12th"]?.percentage],
               ].map(([icon, label, value]) => (
                 <div key={label} style={{ background: "#fff", padding: 20, borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 600, color: "#1f2937", marginBottom: 12 }}>
@@ -964,7 +964,7 @@ setTimeout(() => clearMsgs(), 2000);
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12 }}>
               {(data?.certificates && data.certificates.length > 0) ? data.certificates.map((c, idx) => (
                 <div key={idx} style={{ background: "#f0f9ff", padding: 12, borderRadius: 8, borderLeft: "4px solid #3b82f6" }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: "#1e3a8a" }}>{c.name || c}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: "#1e3a8a" }}>{c.role || c}</div>
                   <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>{c.issuer || ""}</div>
                 </div>
               )) : <div style={{ color: "#6b7280" }}>No certificates found</div>}

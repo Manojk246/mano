@@ -147,6 +147,8 @@ def calculate_ats_score(data, text, job_description=None, normalized_languages=N
 
 # -------------------------
 # Core Resume Processor
+# -------------------------# -------------------------
+# Core Resume Processor (Fixed)
 # -------------------------
 async def process_resume_file(upload_file):
     """Handle resume PDF upload + AI parsing + ATS scoring + DB save."""
@@ -168,25 +170,62 @@ async def process_resume_file(upload_file):
         prompt = f"""
 Extract structured resume info and return valid JSON ONLY:
 {{
-  "name": "", "email": "", "phone": "",
-  "linkedin": "", "github": "", "leetcode": "", "codechef": "",
-  "languages": [], "education": {{}}, "skills": {{"technical": [], "soft": []}},
-  "certificates": [], "role_match": "", "summary": ""
+  "name": "", 
+  "email": "", 
+  "phone": "",
+  "linkedin": "", 
+  "github": "", 
+  "leetcode": "", 
+  "codechef": "",
+  "languages": [],  
+  "education": {{
+      "10th": {{
+          "school": "",
+          "location": "",
+          "year": "",
+          "percentage": ""
+      }},
+      "12th": {{
+          "school": "",
+          "location": "",
+          "year": "",
+          "percentage": ""
+      }},
+      "bachelor": {{
+          "institute": "",
+          "location": "",
+          "degree": "",
+          "expected_graduation": "",
+          "cgpa": ""
+      }}
+  }},
+  "skills": {{
+      "technical": [], 
+      "soft": []
+  }},
+  "certificates": [], 
+  "role_match": "", 
+  "summary": ""
 }}
 Resume text:
 {text}
 """
+
+        # ---- Call AI model ----
         try:
             response = openrouter_client.chat.completions.create(
                 model="gpt-4.1-mini",
-                messages=[{"role": "system", "content": "Return valid JSON."},
-                          {"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": "Return valid JSON only."},
+                    {"role": "user", "content": prompt}
+                ],
                 temperature=0.2,
             )
             ai_output = response.choices[0].message.content
         except Exception as exc:
             return {"error": f"AI request failed: {str(exc)}"}
 
+        # ---- Parse JSON ----
         ai_output = ai_output.strip().replace("```json", "").replace("```", "")
         try:
             data = json.loads(ai_output)
@@ -202,7 +241,7 @@ Resume text:
         # ---- Compute ATS ----
         ats = calculate_ats_score(data, text, normalized_languages=langs)
 
-        # ---- Save to Mongo ----
+        # ---- Save to MongoDB ----
         try:
             await db.reports.insert_one({
                 "filename": upload_file.filename,
@@ -215,7 +254,7 @@ Resume text:
         except Exception as e:
             print("⚠️ MongoDB insert failed:", e)
 
-        # ---- Return ----
+        # ---- Return Result ----
         return {
             "data": data,
             "ats_score": ats["ats_score"],
