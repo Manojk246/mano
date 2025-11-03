@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { X, PlusCircle } from "lucide-react";
 
-const Admin_Resume_Filter = () => {
+const Trainer = () => {
     
   const [resumes, setResumes] = useState([]);
   const [filters, setFilters] = useState({
@@ -664,4 +664,4 @@ const Admin_Resume_Filter = () => {
   );
 };
 
-export default Admin_Resume_Filter;
+export default Trainer;

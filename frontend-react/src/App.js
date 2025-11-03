@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Admin from './pages/Admin/Admin';
 import Admin1 from './pages/Admin/Admin_Resume_Filter';
 import User from './pages/user/user';
+import Trainer from './pages/Trainer/Trainer';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
       <Route path="/admin" element={<Admin />} />
       <Route path="/user" element={<User />} />
       <Route path="/admin_resume_filter" element={<Admin1 />} />
+      <Route path="/trainer" element={<Trainer />} />
       <Route path="*" element={<div style={{padding:20}}><Link to="/">Back to Home</Link></div>} />
     </Routes>
   );

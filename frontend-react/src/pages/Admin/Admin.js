@@ -810,6 +810,17 @@ setTimeout(() => clearMsgs(), 2000);
                   ))}
                 </div>
               </div>
+              <div style={{ marginTop: 12 }}>
+                <strong>Practice Paths:</strong>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                  {(data.codechef_stats.profile.Practice_Paths || []).map((p, idx) => (
+                    <div key={String(p.name || idx)} style={{ background: "#e0f2fe", padding: 10, borderRadius: 8 }}>
+                      <div style={{ fontWeight: 700 }}>{p.name}</div>
+                      <div style={{ fontSize: 12, color: "#475569" }}>{p.completed_percentage}%</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div style={{ marginTop: 12 }}>
                 <strong>Badges:</strong>
