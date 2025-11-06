@@ -9,6 +9,7 @@ import Admin from './pages/Admin/Admin';
 import Admin1 from './pages/Admin/Admin_Resume_Filter';
 import User from './pages/user/user';
 import Trainer from './pages/Trainer/Trainer';
+import ProtectedRoute from './components/ProtectedRoute'; // ✅ new
 
 function App() {
   return (
@@ -18,11 +19,52 @@ function App() {
       <Route path="/features" element={<Features />} />
       <Route path="/contact" element={<Contact />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/admin" element={<Admin />} />
-      <Route path="/user" element={<User />} />
-      <Route path="/admin_resume_filter" element={<Admin1 />} />
-      <Route path="/trainer" element={<Trainer />} />
-      <Route path="*" element={<div style={{padding:20}}><Link to="/">Back to Home</Link></div>} />
+
+      {/* ✅ Protected routes */}
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <Admin />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/trainer"
+        element={
+          <ProtectedRoute allowedRoles={["trainer"]}>
+            <Trainer />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/user"
+        element={
+          <ProtectedRoute allowedRoles={["user", "admin", "trainer"]}>
+            <User />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin_resume_filter"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <Admin1 />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="*"
+        element={
+          <div style={{ padding: 20 }}>
+            <Link to="/">Back to Home</Link>
+          </div>
+        }
+      />
     </Routes>
   );
 }

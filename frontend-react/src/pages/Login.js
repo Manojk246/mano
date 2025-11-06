@@ -5,43 +5,57 @@ export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // login.js (replace handleLogin)
-const handleLogin = async (e) => {
-  e.preventDefault();
-  try {
-    const res = await fetch("http://127.0.0.1:8000/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
 
-    const data = await res.json();
+    try {
+      // Step 1: Login request
+      const res = await fetch("http://localhost:8000/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+        credentials: "include", // ✅ important for HttpOnly cookies
+      });
 
-    if (!res.ok) {
-      alert(data.detail || "Login failed ❌");
-      return;
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.detail || "Login failed ❌");
+        setLoading(false);
+        return;
+      }
+
+      alert(`✅ ${data.message}`);
+
+      // Step 2: Verify token from secure cookie
+      const verify = await fetch("http://localhost:8000/auth/verify_token", {
+        method: "GET",
+        credentials: "include", // ✅ must include cookies
+      });
+
+      if (!verify.ok) {
+        alert("Token verification failed ❌");
+        setLoading(false);
+        return;
+      }
+
+      const verifyData = await verify.json();
+      const role = verifyData.user?.role || "user";
+
+      // Step 3: Redirect based on secure verified role
+      if (role === "admin") navigate("/admin");
+      else if (role === "trainer") navigate("/trainer");
+      else navigate("/user");
+    } catch (err) {
+      console.error(err);
+      alert("Error connecting to server ⚠️");
+    } finally {
+      setLoading(false);
     }
-
-    // prefer backend to return user object; fallback to provided email
-    const returnedEmail = data.user?.email || email;
-    // store normalized/lowercase email
-    localStorage.setItem("email", String(returnedEmail).toLowerCase());
-    // optionally store minimal user info
-    if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
-
-    alert(`✅ ${data.message}`);
-
-    // Redirect based on user role
-    if (data.role === "admin") navigate("/admin");
-    else if (data.role === "trainer") navigate("/trainer");
-    else navigate("/user");
-  } catch (err) {
-    console.error(err);
-    alert("Error connecting to server ⚠️");
-  }
-};
-
+  };
 
   return (
     <div style={pageStyle}>
@@ -58,6 +72,7 @@ const handleLogin = async (e) => {
             style={inputStyle}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
           />
           <input
             type="password"
@@ -66,9 +81,10 @@ const handleLogin = async (e) => {
             style={inputStyle}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
           />
-          <button type="submit" style={loginBtnStyle}>
-            Login
+          <button type="submit" style={loginBtnStyle} disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
           </button>
         </form>
 

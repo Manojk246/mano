@@ -152,10 +152,20 @@ export default function UserDashboard() {
     }
   };
 
-  const handleLogout = () => {
+const handleLogout = async () => {
+  try {
+    await fetch("http://127.0.0.1:8000/auth/logout", {
+      method: "POST",
+      credentials: "include", // ✅ include cookies
+    });
+  } catch (err) {
+    console.error("Logout error:", err);
+  } finally {
     localStorage.clear();
     window.location.href = "/login";
-  };
+  }
+};
+
 
   const getATSRecommendations = () => {
     if (!resumeData) return [];
