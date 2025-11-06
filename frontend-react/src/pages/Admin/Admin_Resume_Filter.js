@@ -3,6 +3,7 @@ import { X, PlusCircle } from "lucide-react";
 
 const Admin_Resume_Filter = () => {
     
+  const [loading, setLoading] = useState(false);
   const [resumes, setResumes] = useState([]);
   const [filters, setFilters] = useState({
     cgpa: "",
@@ -50,43 +51,48 @@ const Admin_Resume_Filter = () => {
 
   // handle form submit
   const handleFilter = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  setLoading(true); // start loading
 
-    const formData = new FormData();
-    resumes.forEach((file) => formData.append("files", file));
+  const formData = new FormData();
+  resumes.forEach((file) => formData.append("files", file));
 
-    Object.entries(filters).forEach(([key, value]) => {
-      if (key !== "skills" && key !== "currentSkill" && value)
-        formData.append(key, value);
+  Object.entries(filters).forEach(([key, value]) => {
+    if (key !== "skills" && key !== "currentSkill" && value)
+      formData.append(key, value);
+  });
+
+  if (filters.skills.length > 0)
+    formData.append("skills", filters.skills.join(","));
+
+  try {
+    const res = await fetch("http://127.0.0.1:8000/admin/filter_uploaded_resumes", {
+      method: "POST",
+      body: formData,
     });
+    const data = await res.json();
 
-    if (filters.skills.length > 0)
-      formData.append("skills", filters.skills.join(","));
-
-    try {
-      const res = await fetch("http://127.0.0.1:8000/admin/filter_uploaded_resumes", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-
-      if (data && data.results) {
-        setFilters((prev) => ({ ...prev, results: data.results }));
-        alert(`✅ Found ${data.count} matching resumes`);
-        setTimeout(() => {
-          window.scrollTo({
-            top: document.body.scrollHeight,
-            behavior: "smooth",
-          });
-        }, 300);
-      } else {
-        alert("❌ No matching resumes found");
-      }
-    } catch (err) {
-      console.error("Error filtering resumes:", err);
-      alert("⚠️ Error filtering resumes. Check console for details.");
+    if (data && data.results) {
+      setFilters((prev) => ({ ...prev, results: data.results }));
+      alert(`✅ Found ${data.count} matching resumes`);
+      setTimeout(() => {
+        window.scrollTo({
+          top: document.body.scrollHeight,
+          behavior: "smooth",
+        });
+      }, 300);
+    } else {
+      alert("❌ No matching resumes found");
     }
-  };
+  } catch (err) {
+    console.error("Error filtering resumes:", err);
+    alert("⚠️ Error filtering resumes. Check console for details.");
+  } finally {
+    setLoading(false); // stop loading
+  }
+};
+
+
 
   return (
     <div style={{
@@ -395,30 +401,56 @@ const Admin_Resume_Filter = () => {
             {/* Department and Degree */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
               <div>
-                <label style={{
-                  display: "block",
-                  color: "#374151",
-                  marginBottom: "8px",
-                  fontWeight: "600",
-                  fontSize: "14px"
-                }}>
-                  🏫 Department
-                </label>
-                <input
-                  type="text"
-                  name="department"
-                  value={filters.department}
-                  onChange={handleChange}
-                  placeholder="e.g., CSE, ECE"
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px",
-                    padding: "10px 12px",
-                    width: "100%",
-                    fontSize: "14px"
-                  }}
-                />
-              </div>
+  <label
+    style={{
+      display: "block",
+      color: "#374151",
+      marginBottom: "8px",
+      fontWeight: "600",
+      fontSize: "14px"
+    }}
+  >
+    🏫 Department
+  </label>
+
+  <input
+    list="departments"
+    name="department"
+    value={filters.department}
+    onChange={handleChange}
+    placeholder="Select or type department"
+    style={{
+      border: "1px solid #e5e7eb",
+      borderRadius: "8px",
+      padding: "10px 12px",
+      width: "100%",
+      fontSize: "14px"
+    }}
+  />
+
+  <datalist id="departments">
+    <option value="Computer Science and Engineering">CSE</option>
+    <option value="Artificial Intelligence and Data Science">AIDS</option>
+    <option value="Information Technology">IT</option>
+    <option value="Electronics and Communication Engineering">ECE</option>
+    <option value="Electrical and Electronics Engineering">EEE</option>
+    <option value="Electronics and Instrumentation Engineering">EIE</option>
+    <option value="Mechanical Engineering">MECH</option>
+    <option value="Mechatronics Engineering">MCT</option>
+    <option value="Automobile Engineering">AUTO</option>
+    <option value="Civil Engineering">CIVIL</option>
+    <option value="Agricultural Engineering">AGRI</option>
+    <option value="Chemical Engineering">CHEM</option>
+    <option value="Bio-Technology">BT</option>
+    <option value="Textile Technology">TEXTILE</option>
+    <option value="Fashion Technology">FT</option>
+    <option value="Food Technology">FOOD</option>
+    <option value="Robotics and Automation">RA</option>
+    <option value="Computer Science and Business Systems">CSBS</option>
+  </datalist>
+</div>
+
+
               <div>
                 <label style={{
                   display: "block",
@@ -459,23 +491,29 @@ const Admin_Resume_Filter = () => {
             borderTop: "1px solid #e5e7eb"
           }}>
             <button
-              type="submit"
-              style={{
-                padding: "12px 24px",
-                background: "#10b981",
-                color: "#fff",
-                borderRadius: "8px",
-                border: "none",
-                fontWeight: "700",
-                cursor: "pointer",
-                fontSize: "14px",
-                transition: "background 0.2s"
-              }}
-              onMouseOver={(e) => e.target.style.background = "#059669"}
-              onMouseOut={(e) => e.target.style.background = "#10b981"}
-            >
-              ✅ Apply Filters
-            </button>
+  type="submit"
+  disabled={loading}
+  style={{
+    padding: "12px 24px",
+    background: loading ? "#9ca3af" : "#10b981",
+    color: "#fff",
+    borderRadius: "8px",
+    border: "none",
+    fontWeight: "700",
+    cursor: loading ? "not-allowed" : "pointer",
+    fontSize: "14px",
+    transition: "background 0.2s"
+  }}
+  onMouseOver={(e) => {
+    if (!loading) e.target.style.background = "#059669";
+  }}
+  onMouseOut={(e) => {
+    if (!loading) e.target.style.background = "#10b981";
+  }}
+>
+  {loading ? "⏳ Filtering..." : "✅ Apply Filters"}
+</button>
+
 
             <button
               type="button"
@@ -599,16 +637,35 @@ const Admin_Resume_Filter = () => {
                           color: "#1f2937"
                         }}>{res.name || "N/A"}</td>
                         <td style={{
-                          border: "1px solid #e5e7eb",
-                          padding: "12px",
-                          color: "#1f2937"
-                        }}>{res.filename}</td>
+  border: "1px solid #e5e7eb",
+  padding: "12px"
+}}>
+  {res.file_url ? (
+    <a
+      href={res.file_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        color: "#2563eb",
+        fontWeight: "600",
+        textDecoration: "none"
+      }}
+      onMouseOver={(e) => (e.currentTarget.style.textDecoration = "underline")}
+      onMouseOut={(e) => (e.currentTarget.style.textDecoration = "none")}
+    >
+      {res.filename}
+    </a>
+  ) : (
+    res.filename || "N/A"
+  )}
+</td>
+
                         <td style={{
                           border: "1px solid #e5e7eb",
                           padding: "12px",
                           color: "#1f2937"
                         }}>
-                          {res.education?.bacheloy?.cgpa || "-"}
+                          {res.education?.bachelor?.cgpa || "-"}
                         </td>
                         <td style={{
                           border: "1px solid #e5e7eb",

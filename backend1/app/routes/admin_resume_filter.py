@@ -3,8 +3,14 @@
 from fastapi import APIRouter, UploadFile, File, Form
 from typing import List, Optional
 from app.helpers.resume_helper import process_resume_file
+import os
+import re
 
 router = APIRouter()
+
+# Directory for temporarily saving uploaded files
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ---------------------------------------------------------
 # 🔧 Helper functions
@@ -18,13 +24,12 @@ def parse_percentage(value):
     except:
         return 0.0
 
+
 def parse_cgpa(value):
     """Convert CGPA value (like '8.32 (upto 5th semester)') to float."""
     if not value:
         return 0.0
     try:
-        # Extract only first numeric portion
-        import re
         match = re.search(r"\d+(\.\d+)?", str(value))
         return float(match.group()) if match else 0.0
     except:
@@ -56,6 +61,15 @@ async def filter_uploaded_resumes(
 
     # ✅ Process each uploaded resume
     for file in files:
+        # Save file temporarily so it can be accessed later
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(file_path, "wb") as buffer:
+            buffer.write(await file.read())
+
+        # Reset file pointer for reprocessing
+        file.file.seek(0)
+
+        # Process resume through your AI resume parser
         parsed = await process_resume_file(file)
         if not parsed or parsed.get("error"):
             continue
@@ -102,8 +116,11 @@ async def filter_uploaded_resumes(
         # ---------------------------------------------------
         # ✅ Passed all filters — Add to Results
         # ---------------------------------------------------
+        file_url = f"http://127.0.0.1:8000/uploads/{file.filename}"
+
         results.append({
             "filename": file.filename,
+            "file_url": file_url,
             "name": data.get("name"),
             "ats_score": ats_score,
             "education": edu,

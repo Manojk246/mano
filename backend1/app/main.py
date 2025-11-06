@@ -3,6 +3,8 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles   # ✅ added
+import os                                     # ✅ added
 import uvicorn
 
 # Import routers
@@ -24,11 +26,19 @@ app = FastAPI(title="Login System")
 # Allow frontend (React) to access the backend API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # you can later replace * with your frontend URL (e.g., http://localhost:3000)
+    allow_origins=["*"],  # You can later replace * with your frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ✅ Create and mount uploads directory
+UPLOAD_DIR = "uploads"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+# Serve uploaded resumes statically
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # -------------------------
 # Root Route
