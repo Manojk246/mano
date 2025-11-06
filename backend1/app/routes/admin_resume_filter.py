@@ -1,16 +1,9 @@
-# app/routes/admin_resume_filter.py
-
 from fastapi import APIRouter, UploadFile, File, Form
 from typing import List, Optional
 from app.helpers.resume_helper import process_resume_file
-import os
 import re
 
 router = APIRouter()
-
-# Directory for temporarily saving uploaded files
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ---------------------------------------------------------
 # 🔧 Helper functions
@@ -37,7 +30,7 @@ def parse_cgpa(value):
 
 
 # ---------------------------------------------------------
-# 🧠 Resume Filtering Endpoint
+# 🧠 Resume Filtering Endpoint (No File Saving)
 # ---------------------------------------------------------
 @router.post("/filter_uploaded_resumes")
 async def filter_uploaded_resumes(
@@ -59,74 +52,68 @@ async def filter_uploaded_resumes(
     department = department.lower().strip() if department else None
     degree = degree.lower().strip() if degree else None
 
-    # ✅ Process each uploaded resume
+    # ✅ Process each uploaded resume (in memory)
     for file in files:
-        # Save file temporarily so it can be accessed later
-        file_path = os.path.join(UPLOAD_DIR, file.filename)
-        with open(file_path, "wb") as buffer:
-            buffer.write(await file.read())
+        try:
+            # Read file contents into memory
+            file_bytes = await file.read()
 
-        # Reset file pointer for reprocessing
-        file.file.seek(0)
+            # Reset the pointer (important for process_resume_file)
+            from io import BytesIO
+            file.file = BytesIO(file_bytes)
 
-        # Process resume through your AI resume parser
-        parsed = await process_resume_file(file)
-        if not parsed or parsed.get("error"):
+            # ✅ Process using your helper
+            parsed = await process_resume_file(file)
+            if not parsed or parsed.get("error"):
+                continue
+
+            data = parsed.get("data", {})
+            ats_score = parsed.get("ats_score", 0)
+            edu = data.get("education", {}) or {}
+            langs = [lang.lower().strip() for lang in data.get("languages", []) if lang]
+            tech_skills = [s.lower().strip() for s in data.get("skills", {}).get("technical", []) if s]
+
+            # ---------------------------------------------------
+            # 🧮 Convert Numeric Fields (safe parsing)
+            # ---------------------------------------------------
+            tenth_value = parse_percentage(edu.get("10th", {}).get("percentage"))
+            twelfth_value = parse_percentage(edu.get("12th", {}).get("percentage"))
+            cgpa_value = parse_cgpa(edu.get("bachelor", {}).get("cgpa"))
+
+            # ---------------------------------------------------
+            # 🚫 Apply Filters
+            # ---------------------------------------------------
+            if cgpa and cgpa_value < cgpa:
+                continue
+            if tenth and tenth_value < tenth:
+                continue
+            if twelfth and twelfth_value < twelfth:
+                continue
+            if ats and ats_score < ats:
+                continue
+            if language and not any(language in l for l in langs):
+                continue
+            if department and department not in str(edu.get("bachelor", {}).get("degree", "")).lower():
+                continue
+            if degree and degree not in str(edu.get("bachelor", {}).get("degree", "")).lower():
+                continue
+            if skill_list and not all(any(skill in s for s in tech_skills) for skill in skill_list):
+                continue
+
+            # ✅ Passed all filters
+            results.append({
+                "filename": file.filename,
+                "file_url": None,  # Not saved
+                "name": data.get("name"),
+                "ats_score": ats_score,
+                "education": edu,
+                "skills": data.get("skills", {}),
+                "languages": langs,
+            })
+
+        except Exception as e:
+            print(f"⚠️ Error processing {file.filename}: {e}")
             continue
-
-        data = parsed.get("data", {})
-        ats_score = parsed.get("ats_score", 0)
-        edu = data.get("education", {}) or {}
-        langs = [lang.lower().strip() for lang in data.get("languages", []) if lang]
-        tech_skills = [s.lower().strip() for s in data.get("skills", {}).get("technical", []) if s]
-
-        # ---------------------------------------------------
-        # 🧮 Convert Numeric Fields (with safe parsing)
-        # ---------------------------------------------------
-        tenth_value = parse_percentage(edu.get("10th", {}).get("percentage"))
-        twelfth_value = parse_percentage(edu.get("12th", {}).get("percentage"))
-        cgpa_value = parse_cgpa(edu.get("bachelor", {}).get("cgpa"))
-
-        # ---------------------------------------------------
-        # 🚫 Filter Logic
-        # ---------------------------------------------------
-        if cgpa is not None and cgpa_value < cgpa:
-            continue
-        if tenth is not None and tenth_value < tenth:
-            continue
-        if twelfth is not None and twelfth_value < twelfth:
-            continue
-        if ats is not None and ats_score < ats:
-            continue
-
-        # ✅ Language filter (any language match)
-        if language and not any(language in l for l in langs):
-            continue
-
-        # ✅ Department and Degree matching (case-insensitive)
-        if department and department not in str(edu.get("bachelor", {}).get("degree", "")).lower():
-            continue
-        if degree and degree not in str(edu.get("bachelor", {}).get("degree", "")).lower():
-            continue
-
-        # ✅ Skills filter (all input skills must appear)
-        if skill_list and not all(any(skill in s for s in tech_skills) for skill in skill_list):
-            continue
-
-        # ---------------------------------------------------
-        # ✅ Passed all filters — Add to Results
-        # ---------------------------------------------------
-        file_url = f"http://127.0.0.1:8000/uploads/{file.filename}"
-
-        results.append({
-            "filename": file.filename,
-            "file_url": file_url,
-            "name": data.get("name"),
-            "ats_score": ats_score,
-            "education": edu,
-            "skills": data.get("skills", {}),
-            "languages": langs,
-        })
 
     return {
         "count": len(results),
