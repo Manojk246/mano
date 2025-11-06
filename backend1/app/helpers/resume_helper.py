@@ -244,6 +244,7 @@ Resume text:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.2,
+                max_tokens=2000,
             )
             ai_output = response.choices[0].message.content
         except Exception as exc:
