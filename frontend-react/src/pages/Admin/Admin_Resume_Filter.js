@@ -570,47 +570,58 @@ const handleSort = (key) => {
 
                 <div style={{
                   marginTop: "12px",
-                  maxHeight: "200px",
+                  maxHeight: "300px",
                   overflowY: "auto",
                   display: "flex",
                   flexDirection: "column",
                   gap: "8px"
                 }}>
-                    {resumes.map((file, idx) => (
-  <div key={idx} style={{
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "10px 12px",
-    background: "#f8fafc",
-    borderRadius: "8px",
-    fontSize: "13px",
-    border: "1px solid #e2e8f0"
-  }}>
-    <a
-      href={file.previewUrl}
-      target="_blank"
-      rel="noopener noreferrer"
+                    {[...resumes]
+  .sort((a, b) => a.name.localeCompare(b.name)) // ✅ Sort filenames A→Z
+  .map((file, idx) => (
+    <div
+      key={idx}
       style={{
-        color: "#2563eb",
-        fontWeight: "600",
-        textDecoration: "none",
-        flex: 1,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 12px",
+        background: "#f8fafc",
+        borderRadius: "8px",
+        fontSize: "13px",
+        border: "1px solid #e2e8f0",
       }}
     >
-      📄 {file.name}
-    </a>
+      <a
+        href={file.previewUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          color: "#2563eb",
+          fontWeight: "600",
+          textDecoration: "none",
+          flex: 1,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        📄 {file.name}
+      </a>
 
-    <X
-      size={16}
-      style={{ cursor: "pointer", color: "#94a3b8", flexShrink: 0, marginLeft: "8px" }}
-      onClick={() => removeFile(file.name)}
-    />
-  </div>
-))}
+      <X
+        size={16}
+        style={{
+          cursor: "pointer",
+          color: "#94a3b8",
+          flexShrink: 0,
+          marginLeft: "8px",
+        }}
+        onClick={() => removeFile(file.name)}
+      />
+    </div>
+  ))}
+
 
 
                 </div>
@@ -905,21 +916,28 @@ const handleSort = (key) => {
                 </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
-                    type="text"
-                    name="currentSkill"
-                    value={filters.currentSkill}
-                    onChange={handleChange}
-                    placeholder="Type a skill and press +"
-                    style={{
-                      border: "2px solid #e2e8f0",
-                      borderRadius: "8px",
-                      padding: "10px 12px",
-                      flex: 1,
-                      fontSize: "14px"
-                    }}
-                    onFocus={(e) => e.target.style.borderColor = "#667eea"}
-                    onBlur={(e) => e.target.style.borderColor = "#e2e8f0"}
-                  />
+  type="text"
+  name="currentSkill"
+  value={filters.currentSkill}
+  onChange={handleChange}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      e.preventDefault(); 
+      addSkill();         
+    }
+  }}
+  placeholder="Type a skill and press + or Enter"
+  style={{
+    border: "2px solid #e2e8f0",
+    borderRadius: "8px",
+    padding: "10px 12px",
+    flex: 1,
+    fontSize: "14px",
+  }}
+  onFocus={(e) => (e.target.style.borderColor = "#667eea")}
+  onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+/>
+
                   <button
                     type="button"
                     onClick={addSkill}
