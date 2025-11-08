@@ -339,13 +339,46 @@ setTimeout(() => clearMsgs(), 2000);
   }
 
   // ---------- Prevent logout from setting data null ----------
-  function handleLogout() {
-    setCurrentId(null);
-    // reset data to initial object instead of null (fixes Cannot read properties of null)
-    setData({ ...initialData });
-    addMsg("success", "Logged out, cleared selection.", "🚪");
-    alert("Logged out successfully!");
+
+const handleLogout = async () => {
+  try {
+    const res = await fetch("http://localhost:8000/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+
+    // Try to parse JSON safely
+    let json = {};
+    try {
+      json = await res.json();
+    } catch {
+      json = {};
+    }
+
+    if (!res.ok) {
+      console.error("Logout failed:", json);
+      throw new Error(json?.detail || "Logout failed");
+    }
+
+    // ✅ Backend confirmed logout
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // Optional: soft clear client-side cookies (won’t affect HttpOnly)
+    document.cookie.split(";").forEach((c) => {
+      document.cookie = c
+        .replace(/^ +/, "")
+        .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+    });
+
+    // ✅ Redirect only after backend confirms success
+    navigate("/login");
+  } catch (err) {
+    console.error("Logout error:", err);
+    alert("Logout failed — please try again.");
   }
+};
+
 
   // ---------- UI rendering helpers ----------
   function renderPill(text) {

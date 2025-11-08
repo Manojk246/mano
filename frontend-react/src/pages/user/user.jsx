@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from "react-router-dom";
 import { Upload, Target, Briefcase, MessageSquare, CheckCircle, AlertCircle, Info, TrendingUp, Award, FileText, User, Mail, Phone, Code, LogOut, Github } from 'lucide-react';
 
 const API_BASE = 'http://127.0.0.1:8000';
@@ -7,7 +8,7 @@ export default function UserDashboard() {
   const [activeTab, setActiveTab] = useState('analysis');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+  const navigate = useNavigate();
   // User data
   const [user, setUser] = useState({});
   
@@ -154,15 +155,40 @@ export default function UserDashboard() {
 
 const handleLogout = async () => {
   try {
-    await fetch("http://127.0.0.1:8000/auth/logout", {
+    const res = await fetch("http://localhost:8000/auth/logout", {
       method: "POST",
-      credentials: "include", // ✅ include cookies
+      credentials: "include",
     });
+
+    // Try to parse JSON safely
+    let json = {};
+    try {
+      json = await res.json();
+    } catch {
+      json = {};
+    }
+
+    if (!res.ok) {
+      console.error("Logout failed:", json);
+      throw new Error(json?.detail || "Logout failed");
+    }
+
+    // ✅ Backend confirmed logout
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // Optional: soft clear client-side cookies (won’t affect HttpOnly)
+    document.cookie.split(";").forEach((c) => {
+      document.cookie = c
+        .replace(/^ +/, "")
+        .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+    });
+
+    // ✅ Redirect only after backend confirms success
+    navigate("/login");
   } catch (err) {
     console.error("Logout error:", err);
-  } finally {
-    localStorage.clear();
-    window.location.href = "/login";
+    alert("Logout failed — please try again.");
   }
 };
 

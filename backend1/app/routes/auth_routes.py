@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from pymongo import MongoClient
@@ -118,3 +118,14 @@ def verify_token(request: Request):
     except jwt.InvalidTokenError as e:
         print("⚠️ Invalid token:", e)
         raise HTTPException(status_code=401, detail=f"Invalid token ❌: {str(e)}")
+
+# -------------------------------
+# logout
+# -------------------------------
+@router.post("/logout")
+def logout(response: Response):
+    """
+    Log the user out by deleting the authentication cookie.
+    """
+    response.delete_cookie("access_token")  
+    return {"message": "Logout successful"}

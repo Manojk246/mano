@@ -14,7 +14,7 @@ from app.routes.codechef_routes import router as codechef_router
 from app.routes.github_routes import router as github_router
 from app.routes.analyze_all import router as analyze_all_router
 from app.routes.admin_resume_filter import router as admin_filter_router
-from app.routes.auth_routes import router as auth_router
+from app.routes.auth_routes import router as auth_router   # ✅ contains logout()
 from app.routes.user import router as user_router
 from app.routes.ai_routes import router as ai_router
 
@@ -54,7 +54,7 @@ app.include_router(codechef_router, prefix="/codechef", tags=["CodeChef"])
 app.include_router(github_router, prefix="/github", tags=["GitHub"])
 app.include_router(analyze_all_router, tags=["Analyze All"])
 app.include_router(admin_filter_router, prefix="/admin", tags=["Admin Filter"])
-app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+app.include_router(auth_router, prefix="/auth", tags=["Authentication"])  # ✅ includes /logout
 app.include_router(user_router, tags=["User"])
 app.include_router(ai_router, tags=["AI"])
 

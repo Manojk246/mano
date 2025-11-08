@@ -9,7 +9,7 @@ import Admin from './pages/Admin/Admin';
 import Admin1 from './pages/Admin/Admin_Resume_Filter';
 import User from './pages/user/user';
 import Trainer from './pages/Trainer/Trainer';
-import ProtectedRoute from './components/ProtectedRoute'; // ✅ new
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
@@ -42,7 +42,7 @@ function App() {
       <Route
         path="/user"
         element={
-          <ProtectedRoute allowedRoles={["user", "admin", "trainer"]}>
+          <ProtectedRoute allowedRoles={["user"]}>
             <User />
           </ProtectedRoute>
         }
