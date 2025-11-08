@@ -72,91 +72,139 @@ def extract_username_from_input(input_str: str):
 # -------------------------
 # ATS Score Calculator
 # -------------------------
+import re
+
 def calculate_ats_score(data, text, job_description=None, normalized_languages=None):
     score_details = {}
 
+    # Pre-normalize text
+    text_lower = (text or "").lower()
+
+    # Lists
     action_verbs = r"\b(developed|built|designed|implemented|managed|optimized|increased|reduced|led|collaborated|deployed|created|trained|improved|tested|analyzed|automated|integrated|streamlined)\b"
     metrics_regex = r"\b(\d+%|\d+\s+(users|clients|projects|transactions|systems)|\$\d+|\d+\s+(x|times|months|years))\b"
 
     tech_keywords = [
-        "python","java","c++","node","react","mongodb","mysql","aws","azure","gcp","docker","kubernetes",
-        "tensorflow","pytorch","devops","fastapi","django","flask","typescript","postgres","rest","graphql"
+        "python","java","c++","node","react","mongodb","mysql","aws","azure","gcp",
+        "docker","kubernetes","tensorflow","pytorch","devops","fastapi","django",
+        "flask","typescript","postgres","rest","graphql"
     ]
     tools_keywords = [
-        "git","github","jira","jenkins","figma","linux","bash","tableau","power bi","excel","visual studio","colab"
+        "git","github","jira","jenkins","figma","linux","bash","tableau",
+        "power bi","excel","visual studio","colab"
     ]
     soft_skills = ["leadership","communication","teamwork","problem solving","ownership"]
     cert_keywords = ["aws","azure","gcp","oracle","pmp","cisco","scrum","microsoft certified"]
 
-    # Section coverage
+    # 1. Section coverage (max 20)
     required_sections = ["experience", "education", "skills", "projects"]
     section_score = 0
     for section in required_sections:
         content = data.get(section) or ""
         if isinstance(content, str) and len(content.strip()) > 50:
-            section_score += 10
-    score_details["Section Coverage"] = min(section_score, 30)
+            section_score += 5
+        elif isinstance(content, list) and len(content) > 0:
+            section_score += 5
+    score_details["Section Coverage"] = min(section_score, 20)
 
-    # Contact info
+    # 2. Contact info (max 5)
     contact_score = 0
-    if data.get("email"): contact_score += 5
-    if data.get("phone"): contact_score += 5
-    if re.search(r"linkedin\.com", text.lower()): contact_score += 5
-    if re.search(r"github\.com", text.lower()): contact_score += 5
-    score_details["Contact Info"] = contact_score
+    if data.get("email"): contact_score += 1
+    if data.get("phone"): contact_score += 1
+    if re.search(r"linkedin\.com", text_lower): contact_score += 1
+    if re.search(r"github\.com", text_lower): contact_score += 1
+    # add one more if address/location exists maybe
+    if data.get("location"): contact_score += 1
+    score_details["Contact Info"] = min(contact_score, 5)
 
-    # Word count
+    # 3. Word count (max 5)
     word_count = len((text or "").split())
-    score_details["Word Count"] = 10 if 350 <= word_count <= 900 else 5 if word_count > 200 else 0
+    if 500 <= word_count <= 1200:
+        wc_score = 5
+    elif word_count >= 300:
+        wc_score = 3
+    else:
+        wc_score = 0
+    score_details["Word Count"] = wc_score
 
-    # Bullet points
+    # 4. Bullet points (max 5)
     bullet_patterns = [r"•", r"◦", r"\*", r"-\s", r"→"]
     bullet_count = sum(len(re.findall(pattern, text or "")) for pattern in bullet_patterns)
-    score_details["Bullet Points"] = 10 if bullet_count >= 5 else 5 if bullet_count >= 2 else 0
+    if bullet_count >= 8:
+        bp_score = 5
+    elif bullet_count >= 3:
+        bp_score = 3
+    else:
+        bp_score = 0
+    score_details["Bullet Points"] = bp_score
 
-    # Action verbs
-    action_count = len(re.findall(action_verbs, text.lower()))
-    score_details["Action Verbs"] = 10 if action_count >= 10 else 5 if action_count >= 4 else 0
+    # 5. Action verbs (max 10)
+    action_count = len(re.findall(action_verbs, text_lower))
+    if action_count >= 12:
+        av_score = 10
+    elif action_count >= 5:
+        av_score = 5
+    else:
+        av_score = 0
+    score_details["Action Verbs"] = av_score
 
-    # Achievements
-    metrics_count = len(re.findall(metrics_regex, text.lower()))
-    score_details["Achievements"] = 10 if metrics_count >= 6 else 5 if metrics_count >= 2 else 0
+    # 6. Achievements (metrics) (max 10)
+    metrics_count = len(re.findall(metrics_regex, text_lower))
+    if metrics_count >= 8:
+        ach_score = 10
+    elif metrics_count >= 3:
+        ach_score = 5
+    else:
+        ach_score = 0
+    score_details["Achievements"] = ach_score
 
-    # Skills match
-    skills_text = text.lower()
-    tech_match = sum(1 for kw in tech_keywords if kw in skills_text)
-    tool_match = sum(1 for kw in tools_keywords if kw in skills_text)
-    soft_match = sum(1 for kw in soft_skills if kw in skills_text)
-    score_details["Technical Skills"] = min(tech_match * 1.5, 15)
-    score_details["Tools & Platforms"] = min(tool_match * 1.2, 10)
-    score_details["Soft Skills Mention"] = min(soft_match * 2, 5)
+    # 7. Technical skills (max 15)
+    tech_match = sum(1 for kw in tech_keywords if kw in text_lower)
+    tech_score = min(tech_match * 1.0, 15)
+    score_details["Technical Skills"] = tech_score
 
-    # Certifications
-    cert_count = sum(1 for kw in cert_keywords if kw in skills_text)
-    score_details["Certifications"] = min(cert_count * 5, 10)
+    # 8. Tools & platforms (max 10)
+    tool_match = sum(1 for kw in tools_keywords if kw in text_lower)
+    tool_score = min(tool_match * 0.8, 10)
+    score_details["Tools & Platforms"] = tool_score
 
-    # Formatting penalty
+    # 9. Soft skills (max 5)
+    soft_match = sum(1 for kw in soft_skills if kw in text_lower)
+    soft_score = min(soft_match * 1.0, 5)
+    score_details["Soft Skills Mention"] = soft_score
+
+    # 10. Certifications (max 5)
+    cert_count = sum(1 for kw in cert_keywords if kw in text_lower)
+    cert_score = min(cert_count * 1.0, 5)
+    score_details["Certifications"] = cert_score
+
+    # 11. Formatting & layout penalty (max deduction 5)
     formatting_penalty = 0
-    if re.search(r"<table|</table>", text.lower()): formatting_penalty += 10
-    if re.search(r"\.(png|jpg|jpeg|svg)", text.lower()): formatting_penalty += 10
+    if re.search(r"<table|</table>", text_lower): formatting_penalty += 2
+    if re.search(r"\.(png|jpg|jpeg|svg)", text_lower): formatting_penalty += 2
     try:
-        if len(max(text.split("\n"), key=len)) > 180:
-            formatting_penalty += 5
+        if len(max(text.split("\n"), key=len)) > 160:
+            formatting_penalty += 1
     except Exception:
         pass
-    score_details["ATS Formatting Score"] = 10 - formatting_penalty if formatting_penalty < 10 else 0
+    formatting_score = 5 - min(formatting_penalty, 5)
+    score_details["Formatting and Layout"] = formatting_score
 
-    # JD matching
+    # 12. Job description matching (if provided) (max 25)
     jd_score = 0
     if job_description:
-        jd_text = job_description.lower()
-        jd_keywords = set(re.findall(r"[a-zA-Z]+", jd_text))
-        resume_words = set(re.findall(r"[a-zA-Z]+", skills_text))
+        jd_lower = job_description.lower()
+        jd_keywords = set(re.findall(r"[a-zA-Z]+", jd_lower))
+        resume_words = set(re.findall(r"[a-zA-Z]+", text_lower))
         match_count = len(jd_keywords.intersection(resume_words))
-        jd_score = min(match_count * 0.5, 20)
+        # scale to 25
+        jd_score = min(match_count * 0.2, 25)
     score_details["JD Match"] = jd_score
 
-    total_score = min(sum(score_details.values()), 100)
+    # Total
+    total_score = sum(score_details.values())
+    if total_score > 100:
+        total_score = 100
     score_details["Total ATS Score"] = round(total_score, 2)
 
     return {
@@ -165,7 +213,6 @@ def calculate_ats_score(data, text, job_description=None, normalized_languages=N
         "word_count": word_count,
         "languages": normalized_languages,
     }
-
 
 # -------------------------
 # Core Resume Processor

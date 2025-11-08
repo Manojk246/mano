@@ -261,7 +261,7 @@ Summary: ${data.summary || "N/A"}
       const json = await res.json();
       // attach results in data object under leetcode_stats
       setData((prev) => ({ ...prev, leetcode_stats: json }));
-      addMsg("success", "✅ Success!", "✅");
+      addMsg("success", "Success!", "✅");
 setTimeout(() => clearMsgs(), 2000);
 
     } catch (e) {
