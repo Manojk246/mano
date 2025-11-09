@@ -1055,7 +1055,6 @@ const handleSort = (key) => {
                       degree: "",
                       results: [],
                     });
-                    setResumes([]);
                   }}
                   style={{
                     padding: "14px 24px",

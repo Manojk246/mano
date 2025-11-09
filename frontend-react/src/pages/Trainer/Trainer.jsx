@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { X, PlusCircle, Upload, Filter, FileText, TrendingUp, Users, Award } from "lucide-react";
 
 const Trainer = () => {
-    
+  const [totalFiles, setTotalFiles] = useState(0);
+  const [processedFiles, setProcessedFiles] = useState(0);
   const [loading, setLoading] = useState(false);
   const [resumes, setResumes] = useState([]);
   const [filters, setFilters] = useState({
@@ -13,24 +14,32 @@ const Trainer = () => {
     currentSkill: "",
     language: "",
     ats: "",
-    department: "",
+    departments: [],
     degree: "",
     results: [],
   });
-
+const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   // handle file upload
 const handleFileChange = (e) => {
   const files = Array.from(e.target.files);
 
-  // Append new files instead of replacing
+  const newFiles = files.map((file) => ({
+    file,
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    previewUrl: URL.createObjectURL(file), // ✅ temporary local URL
+  }));
+
   setResumes((prev) => {
-    // prevent duplicates (based on name + size)
-    const newFiles = files.filter(
-      (file) => !prev.some((f) => f.name === file.name && f.size === file.size)
+    const filtered = newFiles.filter(
+      (nf) => !prev.some((pf) => pf.name === nf.name && pf.size === nf.size)
     );
-    return [...prev, ...newFiles];
+    return [...prev, ...filtered];
   });
 };
+
+
 const removeFile = (filename) => {
   setResumes((prev) => prev.filter((file) => file.name !== filename));
 };
@@ -61,51 +70,145 @@ const removeFile = (filename) => {
     }));
   };
 
+  const departmentMap = {
+  CSE: "Computer Science and Engineering",
+  AIDS: "Artificial Intelligence and Data Science",
+  IT: "Information Technology",
+  ECE: "Electronics and Communication Engineering",
+  EEE: "Electrical and Electronics Engineering",
+  EIE: "Electronics and Instrumentation Engineering",
+  MECH: "Mechanical Engineering",
+  MCT: "Mechatronics Engineering",
+  AUTO: "Automobile Engineering",
+  CIVIL: "Civil Engineering",
+  AGRI: "Agricultural Engineering",
+  CHEM: "Chemical Engineering",
+  BT: "Bio-Technology",
+  TEXTILE: "Textile Technology",
+  FT: "Fashion Technology",
+  FOOD: "Food Technology",
+  RA: "Robotics and Automation",
+  CSBS: "Computer Science and Business Systems",
+};
+
+// ✅ Add department
+const addDepartment = (shortCode) => {
+  if (!shortCode || filters.departments.some((d) => d.short === shortCode)) return;
+  const full = departmentMap[shortCode];
+  setFilters((prev) => ({
+    ...prev,
+    departments: [...prev.departments, { short: shortCode, full }],
+  }));
+};
+
+const removeDepartment = (shortCode) => {
+  setFilters((prev) => ({
+    ...prev,
+    departments: prev.departments.filter((d) => d.short !== shortCode),
+  }));
+};
+
+
   // handle form submit
   const handleFilter = async (e) => {
   e.preventDefault();
   setLoading(true);
   setFilters((prev) => ({ ...prev, results: [] }));
+  setTotalFiles(resumes.length);
+  setProcessedFiles(0);
 
   const formData = new FormData();
-  resumes.forEach((file) => formData.append("files", file));
+  resumes.forEach((fileObj) => formData.append("files", fileObj.file));
+Object.entries(filters).forEach(([key, value]) => {
+  if (
+    key !== "skills" &&
+    key !== "currentSkill" &&
+    key !== "departments" &&
+    value
+  )
+    formData.append(key, value);
+});
 
-  Object.entries(filters).forEach(([key, value]) => {
-    if (key !== "skills" && key !== "currentSkill" && value)
-      formData.append(key, value);
-  });
+if (filters.skills.length > 0)
+  formData.append("skills", filters.skills.join(","));
 
-  if (filters.skills.length > 0)
-    formData.append("skills", filters.skills.join(","));
+if (filters.departments.length > 0)
+  formData.append(
+    "department",
+    filters.departments.map((d) => d.full).join(",")
+  );
+
 
   try {
-    const res = await fetch("http://127.0.0.1:8000/admin/filter_uploaded_resumes", {
+    const response = await fetch("http://127.0.0.1:8000/admin/filter_uploaded_resumes_stream", {
       method: "POST",
       body: formData,
     });
-    const data = await res.json();
 
-    if (data && data.results) {
-  setFilters((prev) => ({ ...prev, results: data.results }));
-  alert(`✅ Found ${data.count} matching resumes`);
-  setResumes([]);
-  setTimeout(() => {
-    window.scrollTo({
-      top: document.body.scrollHeight,
-      behavior: "smooth",
-    });
-  }, 300);
-} else {
-  alert("❌ No matching resumes found");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    let currentResults = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const events = buffer.split("\n\n");
+      buffer = events.pop();
+
+      for (const event of events) {
+        if (event.startsWith("data: ")) {
+          const data = JSON.parse(event.replace("data: ", ""));
+
+          // 🔹 Update live progress
+          if (data.progress) {
+            setProcessedFiles(data.progress);
+            setTotalFiles(data.total);
+
+            if (data.results_so_far) {
+              currentResults = data.results_so_far;
+              setFilters((prev) => ({ ...prev, results: [...currentResults] }));
+            }
+          }
+
+          // 🔹 When done, finalize the results
+          if (data.done) {
+  // Merge backend data (real ATS, education, etc.) with the original uploaded files
+  const mergedResults = data.results.map((res) => {
+    const matchingFile = resumes.find((f) => f.name === res.filename);
+    return {
+      ...res,
+      previewUrl: matchingFile ? matchingFile.previewUrl : null, // 🔥 connect with real local file
+    };
+  });
+
+  setFilters((prev) => ({ ...prev, results: mergedResults }));
+  setProcessedFiles(data.count);
 }
 
+        }
+      }
+    }
   } catch (err) {
-    console.error("Error filtering resumes:", err);
-    alert("⚠️ Error filtering resumes. Check console for details.");
+    console.error("Error streaming resumes:", err);
+    alert("⚠️ Error while processing resumes. Check console for details.");
   } finally {
     setLoading(false);
   }
 };
+
+// Only revoke URLs when component unmounts
+React.useEffect(() => {
+  return () => {
+    filters.results.forEach((r) => {
+      if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
+    });
+  };
+}, []);
+
+
 
 const downloadReport = async () => {
   const { jsPDF } = await import("jspdf");
@@ -117,34 +220,81 @@ const downloadReport = async () => {
 
   let y = 30;
   filters.results.forEach((res, index) => {
-    doc.text(`${index + 1}. ${res.name || "N/A"} (${res.filename || "-"})`, 14, y);
+  doc.text(`${index + 1}. ${res.name || "N/A"} (${res.filename || "-"})`, 14, y);
+  y += 6;
+
+  if (res.email || res.phone) {
+    doc.text(`${res.email || "-"}    ${res.phone || "-"}`, 14, y);
     y += 6;
-    doc.text(
-      `CGPA: ${res.education?.bachelor?.cgpa || "-"} | ATS: ${res.ats_score}%`,
-      14,
-      y
-    );
-    y += 6;
-    doc.text(
-      `Skills: ${res.skills?.technical?.slice(0, 4).join(", ") || "-"}`,
-      14,
-      y
-    );
-    y += 10;
-    if (y > 270) {
-      doc.addPage();
-      y = 20;
-    }
-  });
+  }
+
+  doc.text(
+    `CGPA: ${res.education?.bachelor?.cgpa || "-"} | ATS: ${res.ats_score}%`,
+    14,
+    y
+  );
+  y += 6;
+
+  doc.text(
+    `Skills: ${res.skills?.technical?.slice(0, 4).join(", ") || "-"}`,
+    14,
+    y
+  );
+  y += 10;
+
+  if (y > 270) {
+    doc.addPage();
+    y = 20;
+  }
+});
+
 
   doc.save("Filtered_Resume_Report.pdf");
+};
+
+const sortedResults = React.useMemo(() => {
+  if (!filters.results || filters.results.length === 0) return [];
+
+  const sorted = [...filters.results];
+  if (sortConfig.key) {
+    sorted.sort((a, b) => {
+      const getVal = (obj, key) => {
+        switch (key) {
+          case "name": return (obj.name || "").toLowerCase();
+          case "filename": return (obj.filename || "").toLowerCase();
+          case "department": return (obj.education?.bachelor?.degree || "").toLowerCase();
+          case "cgpa": return parseFloat(obj.education?.bachelor?.cgpa || 0);
+          case "ats": return parseFloat(obj.ats_score || 0);
+          default: return "";
+        }
+      };
+
+      const aVal = getVal(a, sortConfig.key);
+      const bVal = getVal(b, sortConfig.key);
+
+      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }
+
+  return sorted;
+}, [filters.results, sortConfig]);
+
+const handleSort = (key) => {
+  setSortConfig((prev) => {
+    if (prev.key === key) {
+      return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+    }
+    return { key, direction: "asc" };
+  });
 };
 
   const activeFiltersCount = [
     filters.cgpa,
     filters.tenth,
     filters.twelfth,
-    filters.skills.length > 0,
+    filters.departments.length > 0,
     filters.language,
     filters.ats,
     filters.department,
@@ -158,44 +308,43 @@ const downloadReport = async () => {
       padding: "0"
     }}>
       {/* Top Navigation Bar */}
-      <div style={{
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        padding: "20px 32px",
-        boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
-      }}>
-        <div style={{ maxWidth: "1400px", margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <button
-              onClick={() => window.history.back()}
-              style={{
-                background: "rgba(255,255,255,0.2)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                padding: "8px 16px",
-                cursor: "pointer",
-                fontWeight: "600",
-                backdropFilter: "blur(10px)"
-              }}
-            >
-              ⬅ Back
-            </button>
-            <div>
-              <h1 style={{ 
-                fontSize: "28px", 
-                fontWeight: "700", 
-                color: "#fff",
-                margin: 0
-              }}>
-                Resume Filter Dashboard
-              </h1>
-              <p style={{ color: "rgba(255,255,255,0.9)", fontSize: "14px", margin: "4px 0 0 0" }}>
-                Upload, filter, and analyze candidate resumes
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+     <div
+  style={{
+    position: "relative",
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    padding: "20px 32px",
+    boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center", // centers heading block
+  }}
+>
+ 
+
+  {/* Centered Heading */}
+  <div style={{ textAlign: "center" }}>
+    <h1
+      style={{
+        fontSize: "28px",
+        fontWeight: "700",
+        color: "#fff",
+        margin: 0,
+      }}
+    >
+      Resume Filter Dashboard
+    </h1>
+    <p
+      style={{
+        color: "rgba(255,255,255,0.9)",
+        fontSize: "14px",
+        margin: "4px 0 0 0",
+      }}
+    >
+      Upload, filter, and analyze candidate resumes
+    </p>
+  </div>
+</div>
+
 
       <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "32px" }}>
         
@@ -235,18 +384,50 @@ const downloadReport = async () => {
           </div>
 
           <div style={{
-            background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-            padding: "24px",
-            borderRadius: "16px",
-            color: "#fff",
-            boxShadow: "0 4px 12px rgba(79, 172, 254, 0.3)"
-          }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-              <Users size={32} />
-              <span style={{ fontSize: "32px", fontWeight: "700" }}>{filters.results.length}</span>
-            </div>
-            <p style={{ fontSize: "14px", opacity: 0.9, margin: 0 }}>Matched Candidates</p>
-          </div>
+  background: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+  padding: "24px",
+  borderRadius: "16px",
+  color: "#fff",
+  boxShadow: "0 4px 12px rgba(79, 172, 254, 0.3)"
+}}>
+  <div style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: "12px"
+  }}>
+    <TrendingUp size={32} />
+    <span style={{
+      fontSize: "32px",
+      fontWeight: "700"
+    }}>
+      {processedFiles}/{totalFiles || 0}
+    </span>
+  </div>
+  <p style={{ fontSize: "14px", opacity: 0.9, margin: 0 }}>
+    Processed Resumes
+  </p>
+  {totalFiles > 0 && (
+    <div style={{
+      marginTop: "10px",
+      height: "6px",
+      width: "100%",
+      background: "rgba(255,255,255,0.2)",
+      borderRadius: "6px",
+      overflow: "hidden"
+    }}>
+      <div
+        style={{
+          height: "100%",
+          width: `${(processedFiles / totalFiles) * 100}%`,
+          background: "#fff",
+          transition: "width 0.4s ease"
+        }}
+      />
+    </div>
+  )}
+</div>
+
 
           <div style={{
             background: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
@@ -369,36 +550,60 @@ const downloadReport = async () => {
 
                 <div style={{
                   marginTop: "12px",
-                  maxHeight: "200px",
+                  maxHeight: "300px",
                   overflowY: "auto",
                   display: "flex",
                   flexDirection: "column",
                   gap: "8px"
                 }}>
-                  {resumes.map((file, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "10px 12px",
-                        background: "#f8fafc",
-                        borderRadius: "8px",
-                        fontSize: "13px",
-                        border: "1px solid #e2e8f0"
-                      }}
-                    >
-                      <span style={{ color: "#475569", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        📄 {file.name}
-                      </span>
-                      <X
-                        size={16}
-                        style={{ cursor: "pointer", color: "#94a3b8", flexShrink: 0, marginLeft: "8px" }}
-                        onClick={() => removeFile(file.name)}
-                      />
-                    </div>
-                  ))}
+                    {[...resumes]
+  .sort((a, b) => a.name.localeCompare(b.name)) // ✅ Sort filenames A→Z
+  .map((file, idx) => (
+    <div
+      key={idx}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 12px",
+        background: "#f8fafc",
+        borderRadius: "8px",
+        fontSize: "13px",
+        border: "1px solid #e2e8f0",
+      }}
+    >
+      <a
+        href={file.previewUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          color: "#2563eb",
+          fontWeight: "600",
+          textDecoration: "none",
+          flex: 1,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        📄 {file.name}
+      </a>
+
+      <X
+        size={16}
+        style={{
+          cursor: "pointer",
+          color: "#94a3b8",
+          flexShrink: 0,
+          marginLeft: "8px",
+        }}
+        onClick={() => removeFile(file.name)}
+      />
+    </div>
+  ))}
+
+
+
                 </div>
               </>
             )}
@@ -555,53 +760,94 @@ const downloadReport = async () => {
 
                 {/* Department */}
                 <div>
-                  <label style={{
-                    display: "block",
-                    color: "#475569",
-                    marginBottom: "8px",
-                    fontWeight: "600",
-                    fontSize: "13px"
-                  }}>
-                    🏫 Department
-                  </label>
-                  <input
-                    list="departments"
-                    name="department"
-                    value={filters.department}
-                    onChange={handleChange}
-                    placeholder="Select or type"
-                    style={{
-                      border: "2px solid #e2e8f0",
-                      borderRadius: "8px",
-                      padding: "10px 12px",
-                      width: "100%",
-                      fontSize: "14px",
-                      transition: "border-color 0.2s"
-                    }}
-                    onFocus={(e) => e.target.style.borderColor = "#667eea"}
-                    onBlur={(e) => e.target.style.borderColor = "#e2e8f0"}
-                  />
-                  <datalist id="departments">
-                    <option value="Computer Science and Engineering">CSE</option>
-                    <option value="Artificial Intelligence and Data Science">AIDS</option>
-                    <option value="Information Technology">IT</option>
-                    <option value="Electronics and Communication Engineering">ECE</option>
-                    <option value="Electrical and Electronics Engineering">EEE</option>
-                    <option value="Electronics and Instrumentation Engineering">EIE</option>
-                    <option value="Mechanical Engineering">MECH</option>
-                    <option value="Mechatronics Engineering">MCT</option>
-                    <option value="Automobile Engineering">AUTO</option>
-                    <option value="Civil Engineering">CIVIL</option>
-                    <option value="Agricultural Engineering">AGRI</option>
-                    <option value="Chemical Engineering">CHEM</option>
-                    <option value="Bio-Technology">BT</option>
-                    <option value="Textile Technology">TEXTILE</option>
-                    <option value="Fashion Technology">FT</option>
-                    <option value="Food Technology">FOOD</option>
-                    <option value="Robotics and Automation">RA</option>
-                    <option value="Computer Science and Business Systems">CSBS</option>
-                  </datalist>
-                </div>
+  <label
+    style={{
+      display: "block",
+      color: "#475569",
+      marginBottom: "8px",
+      fontWeight: "600",
+      fontSize: "13px",
+    }}
+  >
+    🏫 Department
+  </label>
+
+  <div
+    style={{
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "8px",
+      border: "2px solid #e2e8f0",
+      borderRadius: "8px",
+      padding: "10px",
+      minHeight: "48px",
+      background: "#fff",
+    }}
+  >
+    {filters.departments && filters.departments.length > 0 && (
+      filters.departments.map((dept, i) => (
+        <span
+          key={i}
+          style={{
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "#fff",
+            padding: "6px 12px",
+            borderRadius: "20px",
+            fontSize: "13px",
+            fontWeight: "500",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          {dept.short}
+          <X
+            size={14}
+            style={{ cursor: "pointer" }}
+            onClick={() => removeDepartment(dept.short)}
+          />
+        </span>
+      ))
+    )}
+
+    <select
+      onChange={(e) => addDepartment(e.target.value)}
+      defaultValue=""
+      style={{
+        border: "none",
+        outline: "none",
+        fontSize: "14px",
+        flex: "1",
+        background:"white",
+        minWidth: "180px",
+        cursor: "pointer",
+      }}
+    >
+      <option value="" disabled>
+        Select Department
+      </option>
+      <option style={{background:"white"}} value="CSE">CSE — Computer Science and Engineering</option>
+      <option value="AIDS">AIDS — Artificial Intelligence and Data Science</option>
+      <option value="IT">IT — Information Technology</option>
+      <option value="ECE">ECE — Electronics and Communication Engineering</option>
+      <option value="EEE">EEE — Electrical and Electronics Engineering</option>
+      <option value="EIE">EIE — Electronics and Instrumentation Engineering</option>
+      <option value="MECH">MECH — Mechanical Engineering</option>
+      <option value="MCT">MCT — Mechatronics Engineering</option>
+      <option value="AUTO">AUTO — Automobile Engineering</option>
+      <option value="CIVIL">CIVIL — Civil Engineering</option>
+      <option value="AGRI">AGRI — Agricultural Engineering</option>
+      <option value="CHEM">CHEM — Chemical Engineering</option>
+      <option value="BT">BT — Bio-Technology</option>
+      <option value="TEXTILE">TEXTILE — Textile Technology</option>
+      <option value="FT">FT — Fashion Technology</option>
+      <option value="FOOD">FOOD — Food Technology</option>
+      <option value="RA">RA — Robotics and Automation</option>
+      <option value="CSBS">CSBS — Computer Science and Business Systems</option>
+    </select>
+  </div>
+</div>
+
 
                 {/* Degree */}
                 <div>
@@ -650,21 +896,28 @@ const downloadReport = async () => {
                 </label>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <input
-                    type="text"
-                    name="currentSkill"
-                    value={filters.currentSkill}
-                    onChange={handleChange}
-                    placeholder="Type a skill and press +"
-                    style={{
-                      border: "2px solid #e2e8f0",
-                      borderRadius: "8px",
-                      padding: "10px 12px",
-                      flex: 1,
-                      fontSize: "14px"
-                    }}
-                    onFocus={(e) => e.target.style.borderColor = "#667eea"}
-                    onBlur={(e) => e.target.style.borderColor = "#e2e8f0"}
-                  />
+  type="text"
+  name="currentSkill"
+  value={filters.currentSkill}
+  onChange={handleChange}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      e.preventDefault(); 
+      addSkill();         
+    }
+  }}
+  placeholder="Type a skill and press + or Enter"
+  style={{
+    border: "2px solid #e2e8f0",
+    borderRadius: "8px",
+    padding: "10px 12px",
+    flex: 1,
+    fontSize: "14px",
+  }}
+  onFocus={(e) => (e.target.style.borderColor = "#667eea")}
+  onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+/>
+
                   <button
                     type="button"
                     onClick={addSkill}
@@ -778,11 +1031,10 @@ const downloadReport = async () => {
                       currentSkill: "",
                       language: "",
                       ats: "",
-                      department: "",
+                      departments:[],
                       degree: "",
                       results: [],
                     });
-                    setResumes([]);
                   }}
                   style={{
                     padding: "14px 24px",
@@ -866,8 +1118,9 @@ const downloadReport = async () => {
                         color: "#1f2937",
                         fontSize: "13px"
                       }}
+                      onClick={() => handleSort("name")}
                     >
-                      Name
+  Name {sortConfig.key === "name" && (sortConfig.direction === "asc" ? "▲" : "▼")}
                     </th>
                     <th
                       style={{
@@ -878,8 +1131,10 @@ const downloadReport = async () => {
                         color: "#1f2937",
                         fontSize: "13px"
                       }}
+                      onClick={() => handleSort("filename")}
                     >
-                      Filename
+                      Filename{sortConfig.key === "filename" && (sortConfig.direction === "asc" ? "▲" : "▼")}
+
                     </th>
                     <th
                       style={{
@@ -890,8 +1145,10 @@ const downloadReport = async () => {
                         color: "#1f2937",
                         fontSize: "13px"
                       }}
+                      onClick={() => handleSort("department")}
                     >
-                      Department
+                      Department{sortConfig.key === "department" && (sortConfig.direction === "asc" ? "▲" : "▼")}
+
                     </th>
                     <th
                       style={{
@@ -902,8 +1159,10 @@ const downloadReport = async () => {
                         color: "#1f2937",
                         fontSize: "13px"
                       }}
+                      onClick={() => handleSort("cgpa")}
                     >
-                      CGPA
+                      CGPA{sortConfig.key === "cgpa" && (sortConfig.direction === "asc" ? "▲" : "▼")}
+
                     </th>
                     <th
                       style={{
@@ -914,8 +1173,10 @@ const downloadReport = async () => {
                         color: "#1f2937",
                         fontSize: "13px"
                       }}
+                      onClick={() => handleSort("ats")}
                     >
-                      ATS Score
+                      ATS Score{sortConfig.key === "ats" && (sortConfig.direction === "asc" ? "▲" : "▼")}
+
                     </th>
                     <th
                       style={{
@@ -944,7 +1205,7 @@ const downloadReport = async () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filters.results.map((res, idx) => (
+                  {sortedResults.map((res, idx) => (
                     <tr
                       key={idx}
                       style={{
@@ -955,58 +1216,44 @@ const downloadReport = async () => {
                       }
                       onMouseOut={(e) => (e.currentTarget.style.background = "#fff")}
                     >
-                      <td
-                        style={{
-                          border: "1px solid #e2e8f0",
-                          padding: "14px",
-                          color: "#1f2937",
-                        }}
-                      >
-                        <a
-                          href={res.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: "#667eea",
-                            textDecoration: "none",
-                            fontWeight: "600",
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.textDecoration = "underline")}
-                          onMouseOut={(e) => (e.currentTarget.style.textDecoration = "none")}
-                        >
-                          {res.name || "N/A"}
-                        </a>
-                      </td>
+                      {/* Name column — clickable to open PDF */}
+{/* Name column — plain text */}
+<td
+  style={{
+    border: "1px solid #e2e8f0",
+    padding: "14px",
+    color: "#1f2937",
+    fontWeight: "600",
+  }}
+>
+  {res.name || "N/A"}
+</td>
 
-                      <td
-                        style={{
-                          border: "1px solid #e2e8f0",
-                          padding: "14px",
-                        }}
-                      >
-                        {res.file_url ? (
-                          <a
-                            href={res.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              color: "#667eea",
-                              fontWeight: "600",
-                              textDecoration: "none",
-                            }}
-                            onMouseOver={(e) =>
-                              (e.currentTarget.style.textDecoration = "underline")
-                            }
-                            onMouseOut={(e) =>
-                              (e.currentTarget.style.textDecoration = "none")
-                            }
-                          >
-                            {res.filename}
-                          </a>
-                        ) : (
-                          res.filename || "N/A"
-                        )}
-                      </td>
+{/* Filename column — clickable to open PDF */}
+<td
+  style={{
+    border: "1px solid #e2e8f0",
+    padding: "14px",
+  }}
+>
+  <a
+  href={res.previewUrl}
+  target="_blank"
+  rel="noopener noreferrer"
+  style={{
+    color: "#667eea",
+    textDecoration: "none",
+    fontWeight: "600",
+  }}
+  onMouseOver={(e) => (e.currentTarget.style.textDecoration = "underline")}
+  onMouseOut={(e) => (e.currentTarget.style.textDecoration = "none")}
+>
+  {res.filename || "-"}
+</a>
+
+</td>
+
+
 
                       <td
                         style={{
