@@ -28,9 +28,8 @@ app = FastAPI(title="AI Resume + Platform Analyzer")
 # -------------------------
 origins = [
     "http://localhost:3000",
-    "https://your-frontend.vercel.app"
+    "https://https://mano-sepia.vercel.app/"
 ]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

@@ -13,7 +13,7 @@ export default function Login() {
 
     try {
       // Step 1: Login request
-      const res = await fetch("http://localhost:8000/auth/login", {
+      const res = await fetch("http://resume-analyzer-8rhy.onrender.com/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -31,7 +31,7 @@ export default function Login() {
       alert(`✅ ${data.message}`);
 
       // Step 2: Verify token from secure cookie
-      const verify = await fetch("http://localhost:8000/auth/verify_token", {
+      const verify = await fetch("http://resume-analyzer-8rhy.onrender.com/auth/verify_token", {
         method: "GET",
         credentials: "include", // ✅ must include cookies
       });

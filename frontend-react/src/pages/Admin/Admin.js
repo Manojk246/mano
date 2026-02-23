@@ -20,7 +20,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip,
  * Admin component - Resume Analysis Dashboard
  *
  * Notes:
- * - Expects backend running on http://127.0.0.1:8000
+ * - Expects backend running on https://resume-analyzer-8rhy.onrender.com
  * - POST /upload_resume returns: { data: { ...parsedResume... , ats_score, word_count } }
  * - GET /leetcode/analyze_leetcode/:username returns { profile, analysis, activity_graph }
  * - GET /codechef/analyze_codechef/:username returns { profile }
@@ -30,7 +30,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip,
  * It preserves UI layout, messages, history, and adds charts for activity.
  */
 
-const backend = "http://127.0.0.1:8000";
+const backend = "https://resume-analyzer-8rhy.onrender.com";
 
 const initialData = {
   name: "",
