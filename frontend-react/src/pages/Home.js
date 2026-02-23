@@ -18,7 +18,7 @@ export default function Home() {
         <Link to="/login" style={{background:'linear-gradient(90deg, #ff512f, #dd2476, #24c6dc, #514a9d)',color:'#fff',border:'none',padding:'16px 60px',borderRadius:50,fontSize:'1.3rem',fontWeight:600,boxShadow:'0 0 25px rgba(255, 255, 255, 0.5)'}}>Get Started</Link>
       </section>
 
-      <footer style={{textAlign:'center',padding:20,fontSize:'0.9rem',opacity:0.9}}>✨ Built by <strong>Sri Varsha, Yuvashri, Arjun Hareesh & Manoj</strong></footer>
+      <footer style={{textAlign:'center',padding:20,fontSize:'0.9rem',opacity:0.9}}>✨ Built by <strong>Mathan, Manoj, Rajasri</strong></footer>
     </div>
   );
 }
