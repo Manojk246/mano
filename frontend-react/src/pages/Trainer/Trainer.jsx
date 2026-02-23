@@ -140,7 +140,7 @@ if (filters.departments.length > 0)
 
 
   try {
-    const response = await fetch("https://resume-analyzer-8rhy.onrender.com/admin/filter_uploaded_resumes_stream", {
+    const response = await fetch("http://127.0.0.1:8000/admin/filter_uploaded_resumes_stream", {
       method: "POST",
       body: formData,
     });
@@ -206,7 +206,7 @@ React.useEffect(() => {
       if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
     });
   };
-}, []);
+}, [filters.results]);
 
 
 

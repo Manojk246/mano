@@ -206,7 +206,7 @@ React.useEffect(() => {
       if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
     });
   };
-}, []);
+}, [filters.results]);
 
 
 
