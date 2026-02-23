@@ -17,7 +17,7 @@ export default function Login() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
-        credentials: "include", // ✅ important for HttpOnly cookies
+        credentials: "include", // ✅ important for HttpOnly cookiesss
       });
 
       const data = await res.json();
