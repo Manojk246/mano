@@ -27,7 +27,8 @@ app = FastAPI(title="AI Resume + Platform Analyzer")
 # ✅ CORS Setup (allow cookies from frontend)
 # -------------------------
 origins = [
-    "http://localhost:3000"
+    "http://localhost:3000",
+    "https://your-frontend.vercel.app"
 ]
 
 app.add_middleware(
