@@ -21,7 +21,7 @@ try:
         os.getenv("MONGO_URI"),
         tls=True,
         tlsCAFile=certifi.where(),
-        tlsAllowInvalidCertificates=True
+        retryWrites=True
     )
     db = client[os.getenv("MONGO_DB_NAME")]
     users = db["users"]

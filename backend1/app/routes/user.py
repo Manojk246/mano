@@ -1,15 +1,26 @@
 # app/routes/user.py
 
 from fastapi import APIRouter, UploadFile, Form, HTTPException
+from fastapi.responses import Response
 from datetime import datetime
-import httpx  # ✅ For calling your AI API endpoint
+import httpx
+import gridfs
+from io import BytesIO
+from bson import ObjectId
+
 from app.routes.auth_routes import db
 from app.routes.resume_routes import process_resume_file
 
 router = APIRouter(prefix="/user", tags=["User Dashboard"])
-users = db["users"]
 
-# Your AI Chat endpoint (local FastAPI route)
+# Mongo collections
+users = db["users"]
+reports = db["reports"]
+
+# GridFS instance
+fs = gridfs.GridFS(db)
+
+# Local AI API endpoint
 AI_CHAT_URL = "http://127.0.0.1:8000/ai/chat"
 
 
@@ -19,25 +30,38 @@ AI_CHAT_URL = "http://127.0.0.1:8000/ai/chat"
 @router.get("/info/{email}")
 def get_user_info(email: str):
     user = users.find_one(
-        {"email": {"$regex": f"^{email}$", "$options": "i"}},
+        {"email": email.lower()},
         {"_id": 0, "password": 0}
     )
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
     return {"status": "success", "user": user}
 
 
 # ---------------------------------------------------------------------
-# 2️⃣ Upload Resume → Process + AI Skill Suggestion (Dynamic Role)
+# 2️⃣ Upload Resume → Process + AI Skill Suggestion + GridFS Save
 # ---------------------------------------------------------------------
 @router.post("/upload_resume")
 async def upload_resume(email: str = Form(...), file: UploadFile = None):
+
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded")
 
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Only PDF files allowed")
+
     try:
-        # ✅ Step 1: Process the resume and extract data
-        result = await process_resume_file(file)
+        # ✅ Read file ONLY ONCE
+        file_bytes = await file.read()
+        file_stream = BytesIO(file_bytes)
+
+        # -------------------------
+        # Step 1: Process resume
+        # -------------------------
+        result = await process_resume_file(file_stream)
+
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])
 
@@ -46,21 +70,22 @@ async def upload_resume(email: str = Form(...), file: UploadFile = None):
         ats_breakdown = result.get("ats_breakdown", {})
         word_count = result.get("word_count", 0)
 
-        # ✅ Step 2: Extract technical skills from resume
+        # -------------------------
+        # Step 2: Extract skills
+        # -------------------------
         technical_skills = structured_info.get("skills", {}).get("technical", [])
         skills_text = ", ".join(technical_skills) if technical_skills else "None"
 
-        # ✅ Step 3: Dynamically detect role and suggest missing skills
+        # -------------------------
+        # Step 3: AI role detection
+        # -------------------------
         ai_prompt = (
             f"Analyze this candidate's resume data and determine their most suitable job role "
             f"based on their skills, education, and experience.\n\n"
             f"Resume technical skills: {skills_text}\n\n"
-            f"Return the result in the following format strictly:\n"
+            f"Return strictly:\n"
             f"Role: <predicted role>\n"
-            f"Missing Skills: <comma-separated list of 5-8 new or complementary skills>\n\n"
-            f"Example:\n"
-            f"Role: Data Analyst\n"
-            f"Missing Skills: Power BI, SQL, Pandas, Data Visualization, Excel, Tableau"
+            f"Missing Skills: <comma-separated list>"
         )
 
         detected_role = "Unknown"
@@ -71,41 +96,55 @@ async def upload_resume(email: str = Form(...), file: UploadFile = None):
                 ai_response = await client.post(
                     AI_CHAT_URL,
                     json={"query": ai_prompt, "resume_data": structured_info},
-                    timeout=30
+                    timeout=30,
                 )
+
                 if ai_response.status_code == 200:
                     data = ai_response.json()
                     ai_text = data.get("response", "")
-                    # ✅ Parse role and skills from AI response
+
                     if "Role:" in ai_text:
                         parts = ai_text.split("Role:")[1].split("Missing Skills:")
                         detected_role = parts[0].strip() if len(parts) > 0 else "Unknown"
+
                         if len(parts) > 1:
-                            suggested_skills = [s.strip() for s in parts[1].split(",") if s.strip()]
+                            suggested_skills = [
+                                s.strip() for s in parts[1].split(",") if s.strip()
+                            ]
+
             except Exception as e:
                 print("⚠️ AI request failed:", e)
-                detected_role = "Unknown"
-                suggested_skills = []
 
-        # ✅ Step 4: Save user resume data + AI suggestions + role to MongoDB
-        users.update_one(
-            {"email": email},
-            {
-                "$set": {
-                    "resume_filename": file.filename,
-                    "structured_info": structured_info,
-                    "ats_score": ats_score,
-                    "ats_breakdown": ats_breakdown,
-                    "word_count": word_count,
-                    "suggested_skills": suggested_skills,
-                    "detected_role": detected_role,
-                    "last_uploaded": datetime.utcnow().isoformat(),
-                }
-            },
-            upsert=True,
+        # -------------------------
+        # Step 4: Save PDF into GridFS
+        # -------------------------
+        file_id = fs.put(
+            file_bytes,
+            filename=file.filename,
+            contentType="application/pdf",
+            email=email.lower(),
+            created_at=datetime.utcnow().isoformat()
         )
 
-        # ✅ Step 5: Send response to frontend
+        # -------------------------
+        # Step 5: Save report metadata
+        # -------------------------
+        reports.insert_one({
+            "email": email.lower(),
+            "resume_filename": file.filename,
+            "file_id": str(file_id),
+            "structured_info": structured_info,
+            "ats_score": ats_score,
+            "ats_breakdown": ats_breakdown,
+            "word_count": word_count,
+            "detected_role": detected_role,
+            "suggested_skills": suggested_skills,
+            "created_at": datetime.utcnow().isoformat(),
+        })
+
+        # -------------------------
+        # Step 6: Response
+        # -------------------------
         return {
             "status": "success",
             "message": "Resume processed successfully ✅",
@@ -123,28 +162,36 @@ async def upload_resume(email: str = Form(...), file: UploadFile = None):
 
 
 # ---------------------------------------------------------------------
-# 3️⃣ Fetch ATS + Resume History
+# 3️⃣ Fetch Resume History
 # ---------------------------------------------------------------------
 @router.get("/history/{email}")
 def get_history(email: str):
-    user = users.find_one({"email": email})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
 
-    return {
-        "status": "success",
-        "structured_info": user.get("structured_info", {}),
-        "ats_score": user.get("ats_score", {}),
-        "ats_breakdown": user.get("ats_breakdown", {}),
-        "word_count": user.get("word_count", 0),
-        "detected_role": user.get("detected_role", "Unknown"),
-        "suggested_skills": user.get("suggested_skills", []),
-        "last_uploaded": user.get("last_uploaded", None)
-    }
+    history = list(
+        reports.find({"email": email.lower()}, {"_id": 0})
+               .sort("created_at", -1)
+    )
+
+    if not history:
+        raise HTTPException(status_code=404, detail="No reports found")
+
+    return {"status": "success", "history": history}
 
 
 # ---------------------------------------------------------------------
-# 4️⃣ Admin – List all users
+# 4️⃣ Download Resume PDF from MongoDB GridFS
+# ---------------------------------------------------------------------
+@router.get("/resume-file/{file_id}")
+def get_resume_file(file_id: str):
+    try:
+        file = fs.get(ObjectId(file_id))
+        return Response(file.read(), media_type="application/pdf")
+    except Exception:
+        raise HTTPException(status_code=404, detail="File not found")
+
+
+# ---------------------------------------------------------------------
+# 5️⃣ Admin – List all users
 # ---------------------------------------------------------------------
 @router.get("/all")
 def get_all_users():
