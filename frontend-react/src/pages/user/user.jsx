@@ -160,7 +160,7 @@ const handleLogout = async () => {
       credentials: "include",
     });
 
-    // Try to parse JSON safely
+    // Try to parse JSON safelya
     let json = {};
     try {
       json = await res.json();
