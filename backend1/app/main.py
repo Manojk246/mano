@@ -34,7 +34,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://resume-frontend-jkp5925wf-mathan-2007s-projects.vercel.app"
+        "*"
     ],
     allow_credentials=True,
     allow_methods=["*"],
