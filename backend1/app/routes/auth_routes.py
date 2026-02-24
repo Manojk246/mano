@@ -59,16 +59,12 @@ def login_user(user: LoginModel):
     if not stored_password:
         raise HTTPException(status_code=401, detail="Invalid password ❌")
 
-    # Verify password
-    if stored_password != user.password:
-        try:
-            if not bcrypt.checkpw(
-                user.password.encode("utf-8"),
-                stored_password.encode("utf-8")
-            ):
-            raise HTTPException(status_code=401, detail="Invalid password ❌")
-        except Exception:
-            raise HTTPException(status_code=401, detail="Invalid password ❌")
+    # ✅ SAFE password verification (bcrypt only)
+    if not bcrypt.checkpw(
+        user.password.encode("utf-8"),
+        stored_password.encode("utf-8")
+    ):
+        raise HTTPException(status_code=401, detail="Invalid password ❌")
 
     # Create JWT token
     payload = {
@@ -84,14 +80,14 @@ def login_user(user: LoginModel):
         "role": found.get("role", "user"),
     })
 
-    # ✅ Correctly indented and scoped cookie
+    # ✅ Cookie for Render + Vercel
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
-        secure=True,        # ✅ must be True for SameSite=None
-        samesite="None",    # ✅ allows cross-origin cookies
-        path="/"            # ✅ cookie available to all routes
+        secure=True,
+        samesite="None",
+        path="/"
     )
 
     return response
@@ -104,6 +100,7 @@ def login_user(user: LoginModel):
 def verify_token(request: Request):
     token = request.cookies.get("access_token")
     print("🔍 Cookie token:", token)
+
     if not token:
         raise HTTPException(status_code=401, detail="Missing token ❌")
 
@@ -111,28 +108,29 @@ def verify_token(request: Request):
         decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         print("✅ Decoded token:", decoded)
         return {"valid": True, "user": decoded}
+
     except jwt.ExpiredSignatureError:
         print("⚠️ Token expired")
         raise HTTPException(status_code=401, detail="Token expired ❌")
+
     except jwt.InvalidSignatureError:
         print("⚠️ Invalid signature - wrong secret")
         raise HTTPException(status_code=401, detail="Invalid signature ❌ (check secret key)")
+
     except jwt.InvalidTokenError as e:
         print("⚠️ Invalid token:", e)
         raise HTTPException(status_code=401, detail=f"Invalid token ❌: {str(e)}")
 
+
 # -------------------------------
-# logout
+# Logout
 # -------------------------------
 @router.post("/logout")
 def logout(response: Response):
-    """
-    Log the user out by deleting the authentication cookie.
-    """
     response.delete_cookie(
-    "access_token",
-    path="/",
-    samesite="None",
-    secure=True
+        key="access_token",
+        path="/",
+        samesite="None",
+        secure=True
     )
     return {"message": "Logout successful"}
