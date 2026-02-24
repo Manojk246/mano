@@ -64,19 +64,40 @@ def login_user(user: LoginModel):
     if not stored_password:
         raise HTTPException(status_code=401, detail="Invalid password ❌")
 
-    # ✅ FIXED bcrypt handling (prevents 500 error)
-    if isinstance(stored_password, str):
-        stored_password = stored_password.encode("utf-8")
+    # ======================================================
+    # ✅ SAFE PASSWORD HANDLING (supports old + new users)
+    # ======================================================
 
-    if not bcrypt.checkpw(
-        user.password.encode("utf-8"),
-        stored_password
-    ):
-        raise HTTPException(status_code=401, detail="Invalid password ❌")
+    # CASE 1️⃣ : OLD PLAIN TEXT PASSWORD (like "mathan")
+    if isinstance(stored_password, str) and not stored_password.startswith("$2"):
+        if stored_password != user.password:
+            raise HTTPException(status_code=401, detail="Invalid password ❌")
 
-    # -------------------------------
+        # 🔥 AUTO-UPGRADE TO BCRYPT HASH
+        hashed_pw = bcrypt.hashpw(
+            user.password.encode("utf-8"),
+            bcrypt.gensalt()
+        ).decode()
+
+        users.update_one(
+            {"_id": found["_id"]},
+            {"$set": {"password": hashed_pw}}
+        )
+
+    # CASE 2️⃣ : NEW BCRYPT HASHED PASSWORD
+    else:
+        if isinstance(stored_password, str):
+            stored_password = stored_password.encode("utf-8")
+
+        if not bcrypt.checkpw(
+            user.password.encode("utf-8"),
+            stored_password
+        ):
+            raise HTTPException(status_code=401, detail="Invalid password ❌")
+
+    # ======================================================
     # Create JWT token
-    # -------------------------------
+    # ======================================================
     payload = {
         "email": user.email.lower(),
         "role": found.get("role", "user"),
@@ -85,15 +106,12 @@ def login_user(user: LoginModel):
 
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-    # -------------------------------
-    # Build response
-    # -------------------------------
     response = JSONResponse(content={
         "message": "Login successful ✅",
         "role": found.get("role", "user"),
     })
 
-    # ✅ Render + Vercel cookie setup
+    # ✅ Cookie config for Render + Vercel
     response.set_cookie(
         key="access_token",
         value=token,
@@ -124,15 +142,9 @@ def verify_token(request: Request):
         return {"valid": True, "user": decoded}
 
     except jwt.ExpiredSignatureError:
-        print("⚠️ Token expired")
         raise HTTPException(status_code=401, detail="Token expired ❌")
 
-    except jwt.InvalidSignatureError:
-        print("⚠️ Invalid signature")
-        raise HTTPException(status_code=401, detail="Invalid signature ❌")
-
     except jwt.InvalidTokenError as e:
-        print("⚠️ Invalid token:", e)
         raise HTTPException(status_code=401, detail=f"Invalid token ❌: {str(e)}")
 
 
