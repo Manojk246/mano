@@ -88,7 +88,6 @@ def login_user(user: LoginModel):
         httponly=True,
         secure=True,        # ✅ must be True for SameSite=None
         samesite="None",    # ✅ allows cross-origin cookies
-        domain="localhost", # ✅ match your frontend
         path="/"            # ✅ cookie available to all routes
     )
 
