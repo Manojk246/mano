@@ -62,8 +62,11 @@ def login_user(user: LoginModel):
     # Verify password
     if stored_password != user.password:
         try:
-            if not bcrypt.checkpw(user.password.encode("utf-8"), stored_password.encode("utf-8")):
-                raise HTTPException(status_code=401, detail="Invalid password ❌")
+            if not bcrypt.checkpw(
+                user.password.encode("utf-8"),
+                stored_password.encode("utf-8")
+            ):
+            raise HTTPException(status_code=401, detail="Invalid password ❌")
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid password ❌")
 
@@ -126,5 +129,10 @@ def logout(response: Response):
     """
     Log the user out by deleting the authentication cookie.
     """
-    response.delete_cookie("access_token")  
+    response.delete_cookie(
+    "access_token",
+    path="/",
+    samesite="None",
+    secure=True
+    )
     return {"message": "Logout successful"}
