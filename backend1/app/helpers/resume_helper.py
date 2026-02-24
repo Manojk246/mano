@@ -56,7 +56,7 @@ def extract_username_from_input(input_str: str):
     if not input_str:
         return None
     s = input_str.strip()
-    if s.startswith(("http://", "https://")) or "github.com" in s:
+    if s.startswith(("https://", "https://")) or "github.com" in s:
         if s.startswith("github.com"):
             s = "https://" + s
         parsed = urlparse(s)

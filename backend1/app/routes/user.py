@@ -21,7 +21,7 @@ reports = db["reports"]
 fs = gridfs.GridFS(db)
 
 # Local AI API endpoint
-AI_CHAT_URL = "http://127.0.0.1:8000/ai/chat"
+AI_CHAT_URL = "https://127.0.0.1:8000/ai/chat"
 
 
 # ---------------------------------------------------------------------
