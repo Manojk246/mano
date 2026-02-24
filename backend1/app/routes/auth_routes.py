@@ -95,7 +95,7 @@ def login_user(user: LoginModel):
         ):
             raise HTTPException(status_code=401, detail="Invalid password ❌")
 
-    # ======================================================
+    # ========================================================
     # Create JWT token
     # ======================================================
     payload = {
