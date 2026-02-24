@@ -201,8 +201,10 @@ if (filters.departments.length > 0)
 
 // Only revoke URLs when component unmounts
 React.useEffect(() => {
+  const results = filters.results;
+
   return () => {
-    filters.results.forEach((r) => {
+    results.forEach((r) => {
       if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
     });
   };
