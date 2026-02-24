@@ -168,8 +168,9 @@ if (filters.departments.length > 0)
             setTotalFiles(data.total);
 
             if (data.results_so_far) {
-              currentResults = data.results_so_far;
-              setFilters((prev) => ({ ...prev, results: [...currentResults] }));
+              const newResults = [...data.results_so_far];
+currentResults = newResults;
+setFilters((prev) => ({ ...prev, results: newResults }));
             }
           }
 
