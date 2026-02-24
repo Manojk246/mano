@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from "react-router-dom";
-import { Upload, Target, Briefcase, MessageSquare, CheckCircle, AlertCircle, Info, TrendingUp, Award, FileText, User, Mail, Phone, Code, LogOut, Github } from 'lucide-react';
+import { Upload, Target, Briefcase, MessageSquare, CheckCircle, AlertCircle, Info, TrendingUp, FileText, User, Mail, Phone, Code, LogOut } from 'lucide-react';
 
 const API_BASE = 'https://resume-analyzer-8rhy.onrender.com';
 
