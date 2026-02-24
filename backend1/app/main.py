@@ -33,7 +33,7 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,  # ✅ required for HttpOnly cookies
+    allow_credentials=False,  # ✅ required for HttpOnly cookies
     allow_methods=["*"],
     allow_headers=["*"],
 )
